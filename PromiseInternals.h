@@ -127,13 +127,15 @@ namespace Promise2 {
       // readonly
       const ThreadContext _context;
 
-      std::functional<ReturnType(ArgType)> _onFulfill;
-      std::functional<void(std::exception_ptr)> _onReject;
+      std::function<ReturnType(ArgType)> _onFulfill;
+      std::function<void(std::exception_ptr)> _onReject;
 
       std::once_flag _called;
 
     public:
-      PromiseNode(Task&& movedTask, const ThreadContext& context);
+      PromiseNode(std::function<ReturnType(ArgType)>&& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  const ThreadContext& context);
       PromiseNode(PromiseNode&& node) noexcept;
 
     public:
@@ -142,18 +144,20 @@ namespace Promise2 {
         std::call_once(_called, [&]() {
 
           bool safelyDone = false;
-                // update the status to `running`
+
           try {
             safelyDone = runFulfill(_fulfill.get());
           } catch (...) {
-                    // previous task is failed
+            // previous task is failed
+
+
             _forward.reject(std::current_exception());
           }
 
-                // in some case, previous one already failed
-                // propage the exception
+          // in some case, previous one already failed
+          // propage the exception
           if (!safelyDone) {
-                    // clean the status
+            // clean the status
             _forward.notify();
           }
         });
@@ -162,16 +166,16 @@ namespace Promise2 {
     protected:
       template<typename T>
       bool runFulfill(T&& preFulfilled) noexcept {
-            // warpped the exception
+        // warpped the exception
         try {
           _forward.fulfill(
             _onFulfill(std::forward<T>(preFulfilled));
-            );
+          );
         } catch (...) {
           _forward.reject(std::current_exception());
         }
 
-            // I'm done!
+        // I'm done!
         _forward.notify();
         return true;
       }
