@@ -35,21 +35,10 @@ namespace Promise2 {
       virtual void postToRun() = 0;
 
     public:
-      virtual void chainNext() = 0;
+      virtual void chainNext(const std::shared_ptr<PromiseNode>& ) = 0;
+
+      virtual ThreadContext context() const = 0;
     };
-
-    //
-    // hold some info of the next chained promise node
-    //
-  	class PromiseNotify {
-      public:
-        virtual ~PromiseNotify() = default;
-
-      public:
-      	// when current task is done, call this to notify the next one
-        virtual void notify() = 0;
-    };
-
 
     //
     // fulfill traits
@@ -60,9 +49,9 @@ namespace Promise2 {
       std::future<FulfillArgType> _previousPromise;
 
     public:
-      ~Fulfill() = default;
+      virtual ~Fulfill() = default;
 
-    public:
+    protected:
       FulfillArgType get() { 
         // has any previous promise
         if (!_previousPromise.valid()) {
@@ -73,12 +62,11 @@ namespace Promise2 {
       }
 
       void attach(std::future<FulfillArgType>&& previousPromise) {
-        // already attached
-        if (_previousPromise.valid()) {
-          throw std::exception("");
-        }
-
         _previousPromise = std::move(previousPromise);
+      }
+
+      bool isAttached() const {
+        return _previousPromise.valid();
       }
     };
 
@@ -86,21 +74,31 @@ namespace Promise2 {
     // forward traits
     //
     template<typename ForwardType>
-    class Forward : public PromiseNotify {
+    class Forward {
     private:
       std::promise<ForwardType> _forwardPromise; 
+      std::future<ForwardType> _forwardFuture;
+
+      std::function<void()> _notify;
 
     public:
+      Forward() {
+        _forwardFuture = std::move(_forwardPromise.get_future());
+      }
       ~Forward() = default;
 
     public:
-      virtual void notify() override {
-        // TODO
+      void notify() {
+        if (_notify) {
+          _notify();
+        }
       }
 
     public:
-      std::future<ForwardType>&& getFuture() {
-        return std::move(_forwardPromise.get_future());
+      void doChaining(Fulfill<ForwardType>& fulfill, const ThreadContext& context) {
+        fulfill.attach(std::move(_forwardPromise.get_future()));
+        // update notify
+        // TODO:
       }
 
       template<typename T>
@@ -111,17 +109,19 @@ namespace Promise2 {
       void reject(std::exception_ptr exception) {
         _forwardPromise.set_exception(exception);
       }
+
+      bool hasMovedFuture() const {
+        return !_forwardFuture.valid();
+      }
     };
 
     //
     // Promise node
     //
 	template<typename ReturnType, typename ArgType, 
-           typename FulfillTrait = Fulfill<ArgType>,
            typename ForwardTrait = Forward<ReturnType>>
-    class PromiseNodeInternal : public PromiseNode {
+    class PromiseNodeInternal : public PromiseNode, public Fulfill<ArgType> {
     private:
-      FulfillTrait _fulfill;
       ForwardTrait _forward;
       
       // readonly
@@ -139,19 +139,21 @@ namespace Promise2 {
       PromiseNode(PromiseNode&& node) noexcept;
 
     public:
-      void run() {
+      virtual void postToRun() {
+        // TODO:
+      }
+
+      virtual void run() override {
             // ensure calling once
         std::call_once(_called, [&]() {
 
           bool safelyDone = false;
 
           try {
-            safelyDone = runFulfill(_fulfill.get());
+            safelyDone = runFulfill(get());
           } catch (...) {
             // previous task is failed
-
-
-            _forward.reject(std::current_exception());
+            runReject();
           }
 
           // in some case, previous one already failed
@@ -163,6 +165,32 @@ namespace Promise2 {
         });
       }
 
+    public:
+      virtual void chainNext(const std::shared_ptr<PromiseNode>& node) override {
+        // check self has been chained a node
+        if (_forward.hasMovedFuture()) {
+          throw std::exception("");
+        }
+
+        if (node == this) {
+          throw std::exception("");
+        }
+
+        auto&& context = node->context();
+        auto fulfill = std::static_pointer_cast<Fulfill<ArgType>>(node);
+
+        if (fulfill->isAttached()) {
+          throw std::exception("");
+        }
+
+        // chain!
+        _forward.doChaining(fulfill, context);
+      }
+
+      virtual ThreadContext context() const override {
+        return _context;
+      }
+
     protected:
       template<typename T>
       bool runFulfill(T&& preFulfilled) noexcept {
@@ -172,12 +200,25 @@ namespace Promise2 {
             _onFulfill(std::forward<T>(preFulfilled));
           );
         } catch (...) {
-          _forward.reject(std::current_exception());
+          runReject();
         }
 
         // I'm done!
         _forward.notify();
         return true;
+      }
+
+      // called when exception has been thrown
+      void runReject() noexcept {
+        if (_onReject) {
+          try {
+            _onReject(std::current_exception());
+          } catch (...) {
+            _forward.reject(std::current_exception());
+          }
+        } else {
+          _forward.reject(std::current_exception());
+        }
       }
 
     private:

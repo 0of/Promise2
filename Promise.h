@@ -43,9 +43,7 @@ namespace Promise2 {
       }
 
       auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), context);
-      // chain the node
-      // TODO:
-      _node->chainNext();
+      _node->chainNext(nextNode);
 
       // all OK, return the wrapped object
       Promise<NextT> nextPromise;
