@@ -12,6 +12,14 @@
 
 namespace Promise2 {
   //
+  // @class PromiseDefer
+  //
+  template<typename T>
+  class PromiseDefer {
+
+  };
+
+  //
   // @class Promise
   //
   template<typename T>
@@ -24,13 +32,20 @@ namespace Promise2 {
     Promise() = default;
     
     // constructor with task and running context
-    Promise(std::function<T(void)>&& task, const ThreadContext& context)
+    Promise(std::function<T(void)>&& task, ThreadContext* &&context)
       : _node() {
       _node = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(task), 
-                    std::function<void(std::exception_ptr)>(), context);
+                    std::function<void(std::exception_ptr)>(), std::move(context));
 
-      // schedule to run
-      _node->postToRun();
+      context->scheduleToRun(&Details::PromiseNode::run, _node);
+    }
+
+    Promise(Promise&& promise)
+      : _node{ std::move(promise._node }
+    {}
+
+    Promise& operator = (Promise&& promise) {
+      _node = std::move(promise._node;
     }
 
   public:
@@ -39,7 +54,7 @@ namespace Promise2 {
                         std::function<void(std::exception_ptr)>&& onReject, 
                         const ThreadContext& context) {
       if (!isValid()) {
-        throw std::logic_error("");
+        throw std::logic_error("invalid promise");
       }
 
       auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), context);
@@ -55,6 +70,10 @@ namespace Promise2 {
     bool isValid() const {
       return !!_node;
     }
+
+  private:
+    Promise(const Promise& ) = delete;
+    Promise& operator = (const Promise& ) = delete;
   };
 }
 

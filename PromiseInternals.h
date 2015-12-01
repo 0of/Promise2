@@ -13,10 +13,19 @@
 #include <functional>
 #include <future>
 #include <mutex>
+#include <atomic>
 
-/// MARK: stub class
 namespace Promise2 {
-  class ThreadContext {};
+  // 
+  // @class ThreadContext
+  //
+  class ThreadContext {
+  public:
+    virtual ~ThreadContext() = default;
+
+  public:
+    virtual void scheduleToRun(std::function<void()>&& task) = 0;
+  };
 }
 
 namespace Promise2 {
@@ -31,13 +40,11 @@ namespace Promise2 {
     public:
       // run the current task under current context
       virtual void run() = 0;
-      // post to run the task
-      virtual void postToRun() = 0;
 
     public:
       virtual void chainNext(const std::shared_ptr<PromiseNode>& ) = 0;
 
-      virtual ThreadContext context() const = 0;
+      virtual std::function<void()> acquireNotify() = 0;
     };
 
     //
@@ -47,6 +54,16 @@ namespace Promise2 {
     class Fulfill {
     private:
       std::future<FulfillArgType> _previousPromise;
+
+      std::atomic_flag _attachGuard;
+      std::atomic_bool _hasAttached;
+
+    protected:
+      Fulfill()
+        : _previousPromise{}
+        , _attachGuard{ ATOMIC_FLAG_INIT }
+        , _hasAttached{ false }
+      {}
 
     public:
       virtual ~Fulfill() = default;
@@ -62,11 +79,18 @@ namespace Promise2 {
       }
 
       void attach(std::future<FulfillArgType>&& previousPromise) {
+        if (_attachGuard.test_and_set()) {
+          // already attached or is attaching
+          throw std::exception("");
+        }
+
         _previousPromise = std::move(previousPromise);
+        // attached
+        _hasAttached = true;
       }
 
       bool isAttached() const {
-        return _previousPromise.valid();
+        return _hasAttached;
       }
     };
 
@@ -81,8 +105,15 @@ namespace Promise2 {
 
       std::function<void()> _notify;
 
+      std::atomic_flag _chainingGuard;
+      std::atomic_bool _hasChained;
+      std::atomic_bool _hasFinished;
+
     public:
-      Forward() {
+      Forward()
+        : _chainingGuard{ ATOMIC_FLAG_INIT }
+        , _hasChained{ false }
+        , _hasFinished{ false } {
         _forwardFuture = std::move(_forwardPromise.get_future());
       }
       ~Forward() = default;
@@ -95,23 +126,47 @@ namespace Promise2 {
       }
 
     public:
-      void doChaining(Fulfill<ForwardType>& fulfill, const ThreadContext& context) {
-        fulfill.attach(std::move(_forwardPromise.get_future()));
-        // update notify
-        // TODO:
+      void doChaining(Fulfill<ForwardType>& fulfill, std::function<void()>&& notify) {
+        if (_chainingGuard.test_and_set()) {
+          // already chained or is chaining
+          throw std::exception("");
+        }
+
+        try {
+
+          fulfill.attach(std::move(_forwardPromise.get_future()));
+
+          // update notifier
+          _notify = std::move(notify);
+
+        } catch (const std::exception& e) {
+          // something goes wrong
+          // clean the guard flag
+          _chainingGuard.clear();
+          throw e;
+        }
+        
+        _hasChained = true;
+
+        // if already finished notify the next node now
+        if (_hasFinished) {
+          _notify();
+        }
       }
 
       template<typename T>
       void fulfill(T&& value) {
         _forwardPromise.set_value(std::forward<T>(value));
+        _hasFinished = true;
       }
 
       void reject(std::exception_ptr exception) {
         _forwardPromise.set_exception(exception);
+        _hasFinished = true;
       }
 
-      bool hasMovedFuture() const {
-        return !_forwardFuture.valid();
+      bool hasChained() const {
+        return _hasChained;
       }
     };
 
@@ -120,12 +175,13 @@ namespace Promise2 {
     //
 	template<typename ReturnType, typename ArgType, 
            typename ForwardTrait = Forward<ReturnType>>
-    class PromiseNodeInternal : public PromiseNode, public Fulfill<ArgType> {
+    class PromiseNodeInternal : public PromiseNode
+                              , public Fulfill<ArgType>
+                              , public std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType, ForwardTrait>>{
     private:
       ForwardTrait _forward;
       
-      // readonly
-      const ThreadContext _context;
+      std::shared_ptr<ThreadContext> _context;
 
       std::function<ReturnType(ArgType)> _onFulfill;
       std::function<void(std::exception_ptr)> _onReject;
@@ -135,14 +191,13 @@ namespace Promise2 {
     public:
       PromiseNode(std::function<ReturnType(ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
-                  const ThreadContext& context);
-      PromiseNode(PromiseNode&& node) noexcept;
+                  std::shared_ptr<ThreadContext>&& context)
+        : PromiseNode()
+        , Fulfill<ArgType>()
+        , _context{ std::move(context) }
+      {}
 
     public:
-      virtual void postToRun() {
-        // TODO:
-      }
-
       virtual void run() override {
             // ensure calling once
         std::call_once(_called, [&]() {
@@ -165,30 +220,29 @@ namespace Promise2 {
         });
       }
 
+      virtual std::function<void()> acquireNotify() override {
+        auto&& run = std::bind(&run, shared_from_this());
+        return std::move(std::bind(&ThreadContext::scheduleToRun, _context, std::move(run)));
+      }
+
     public:
       virtual void chainNext(const std::shared_ptr<PromiseNode>& node) override {
-        // check self has been chained a node
-        if (_forward.hasMovedFuture()) {
-          throw std::exception("");
-        }
-
         if (node == this) {
           throw std::exception("");
         }
 
-        auto&& context = node->context();
+        // check self has been chained a node
+        if (_forward.hasChained()) {
+          throw std::exception("");
+        }
+
         auto fulfill = std::static_pointer_cast<Fulfill<ArgType>>(node);
 
         if (fulfill->isAttached()) {
           throw std::exception("");
         }
 
-        // chain!
-        _forward.doChaining(fulfill, context);
-      }
-
-      virtual ThreadContext context() const override {
-        return _context;
+        _forward.doChaining(fulfill, node->acquireNotify());
       }
 
     protected:
@@ -222,6 +276,7 @@ namespace Promise2 {
       }
 
     private:
+      PromiseNode(PromiseNode&& node) = delete;
       PromiseNode(const PromiseNode&) = delete;
     };
   }
