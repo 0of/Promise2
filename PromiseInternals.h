@@ -12,8 +12,8 @@
 #include <memory>
 #include <functional>
 #include <future>
-#include <mutex>
 #include <atomic>
+#include <exception>
 
 namespace Promise2 {
   // 
@@ -47,50 +47,145 @@ namespace Promise2 {
       virtual std::function<void()> acquireNotify() = 0;
     };
 
+    class SharedPromiseEBC {
+    protected:
+      std::exception_ptr _exception;
+
+      std::atomic_flag _assignGuard;
+      std::atomic_bool _hasAssigned;
+
+    protected:
+      SharedPromiseEBC()
+        : _exception{ nullptr }
+        , _assignGuard{ ATOMIC_FLAG_INIT }
+        , _hasAssigned{ false }
+      {}
+
+    public:
+      void setException(std::exception_ptr e) {
+        if (_assignGuard.test_and_set()) {
+          // already assigned or is assigning
+          throw std::logic_error("promise duplicated assignments");
+        }
+
+        _exception = e;
+        _hasAssigned = true;
+      }
+
+    public:
+      //
+      // access guard must be invoked before directly access the `value` 
+      // check the assigned flag and make sure no exception has been thrown
+      //
+      void accessGuard() {
+        if (!_hasAssigned) {
+          throw std::logic_error("promise invalid state");
+        }
+
+        if (_exception) {
+          std::rethrow_exception(_exception);
+        }
+      }
+
+    public:
+      bool hasAssigned() const {
+        return _hasAssigned;
+      }
+
+    private:
+      SharedPromiseEBC(const SharedPromiseEBC&) = delete;
+      SharedPromiseEBC(const SharedPromiseEBC&&) = delete;
+    };
+
+
+    template<typename T>
+    class SharedPromise : public SharedPromiseEBC {
+    public:
+      // allow to direct access
+      T value;
+
+    public:
+      SharedPromise()
+        : value()
+      {}
+
+      ~SharedPromise() = default;
+
+    public:
+      template<typename ValueType>
+      void setValue(ValueType&& v) {
+        if (_assignGuard.test_and_set()) {
+          // already assigned or is assigning
+          throw std::logic_error("promise duplicated assignments");
+        }
+
+        value = std::forward<ValueType>(v);
+        _hasAssigned = true;
+      }
+    };
+
+    template<>
+    class SharedPromise<void> : public SharedPromiseEBC {
+    public:
+      SharedPromise() = default;
+      ~SharedPromise() = default;
+
+    public:
+      void setValue() {
+        if (_assignGuard.test_and_set()) {
+          // already assigned or is assigning
+          throw std::logic_error("promise duplicated assignments");
+        }
+
+        _hasAssigned = true;
+      }
+    };
+
+    //
+    //  @alias
+    //    
+    template<typename T> using DeferPromiseCore = std::shared_ptr<SharedPromise<T>>;
+
+
     //
     // fulfill traits
     //
     template<typename FulfillArgType>
     class Fulfill {
     private:
-      std::future<FulfillArgType> _previousPromise;
-
+      DeferPromiseCore<FulfillArgType> _previousPromise;
       std::atomic_flag _attachGuard;
-      std::atomic_bool _hasAttached;
 
     protected:
       Fulfill()
-        : _previousPromise{}
+        : _previousPromise()
         , _attachGuard{ ATOMIC_FLAG_INIT }
-        , _hasAttached{ false }
       {}
 
     public:
       virtual ~Fulfill() = default;
 
     protected:
-      FulfillArgType get() { 
-        // has any previous promise
-        if (!_previousPromise.valid()) {
-          throw std::exception("");
+      FulfillArgType get() {
+        if (!isAttached()) {
+          throw std::logic_error("invalid promise state");
         }
 
-        return _previousPromise.get();
+        _previousPromise->accessGuard();
+        return _previousPromise->value;
       }
 
-      void attach(std::future<FulfillArgType>&& previousPromise) {
+      void attach(const DeferPromiseCore<FulfillArgType>& previousPromise) {
         if (_attachGuard.test_and_set()) {
           // already attached or is attaching
-          throw std::exception("");
+          throw std::logic_error("promise duplicated attachments");
         }
 
-        _previousPromise = std::move(previousPromise);
-        // attached
-        _hasAttached = true;
+        _previousPromise = previousPromise;
       }
 
       bool isAttached() const {
-        return _hasAttached;
+        return !!_previousPromise;
       }
     };
 
@@ -100,22 +195,18 @@ namespace Promise2 {
     template<typename ForwardType>
     class Forward {
     private:
-      std::promise<ForwardType> _forwardPromise; 
-      std::future<ForwardType> _forwardFuture;
+      DeferPromiseCore<ForwardType> _promise;
 
       std::function<void()> _notify;
 
       std::atomic_flag _chainingGuard;
       std::atomic_bool _hasChained;
-      std::atomic_bool _hasFinished;
 
     public:
       Forward()
         : _chainingGuard{ ATOMIC_FLAG_INIT }
-        , _hasChained{ false }
-        , _hasFinished{ false } {
-        _forwardFuture = std::move(_forwardPromise.get_future());
-      }
+        , _hasChained{ false } 
+      {}
       ~Forward() = default;
 
     public:
@@ -129,12 +220,12 @@ namespace Promise2 {
       void doChaining(Fulfill<ForwardType>& fulfill, std::function<void()>&& notify) {
         if (_chainingGuard.test_and_set()) {
           // already chained or is chaining
-          throw std::exception("");
+          throw std::logic_error("promise duplicated chainings");
         }
 
         try {
 
-          fulfill.attach(std::move(_forwardPromise.get_future()));
+          fulfill.attach(_promise);
 
           // update notifier
           _notify = std::move(notify);
@@ -149,20 +240,18 @@ namespace Promise2 {
         _hasChained = true;
 
         // if already finished notify the next node now
-        if (_hasFinished) {
+        if (_promise->hasAssigned()) {
           _notify();
         }
       }
 
       template<typename T>
       void fulfill(T&& value) {
-        _forwardPromise.set_value(std::forward<T>(value));
-        _hasFinished = true;
+        _promise.setValue(std::forward<T>(value));
       }
 
       void reject(std::exception_ptr exception) {
-        _forwardPromise.set_exception(exception);
-        _hasFinished = true;
+        _promise.setException(exception);
       }
 
       bool hasChained() const {
@@ -170,14 +259,19 @@ namespace Promise2 {
       }
     };
 
+    template<typename ReturnType, typename ArgType, typename ForwardTrait>
+    class PromiseNodeInternal;
+
+    template<typename ReturnType, typename ArgType, typename ForwardTrait>
+    using EnableShared = std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType, ForwardTrait>>;
     //
     // Promise node
     //
-	template<typename ReturnType, typename ArgType, 
+	 template<typename ReturnType, typename ArgType, 
            typename ForwardTrait = Forward<ReturnType>>
     class PromiseNodeInternal : public PromiseNode
                               , public Fulfill<ArgType>
-                              , public std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType, ForwardTrait>>{
+                              , EnableShared<ReturnType, ArgType, ForwardTrait> {
     private:
       ForwardTrait _forward;
       
@@ -189,11 +283,13 @@ namespace Promise2 {
       std::once_flag _called;
 
     public:
-      PromiseNode(std::function<ReturnType(ArgType)>&& onFulfill, 
+      PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   std::shared_ptr<ThreadContext>&& context)
         : PromiseNode()
         , Fulfill<ArgType>()
+        , _onFulfill{ std::move(onFulfill) }
+        , _onReject{ std::move(onReject) }
         , _context{ std::move(context) }
       {}
 
@@ -205,7 +301,7 @@ namespace Promise2 {
           bool safelyDone = false;
 
           try {
-            safelyDone = runFulfill(get());
+            safelyDone = runFulfill(Fulfill<ArgType>::get());
           } catch (...) {
             // previous task is failed
             runReject();
@@ -221,27 +317,17 @@ namespace Promise2 {
       }
 
       virtual std::function<void()> acquireNotify() override {
-        auto&& run = std::bind(&run, shared_from_this());
+        auto&& run = std::bind(&PromiseNode::run, EnableShared<ReturnType, ArgType, ForwardTrait>::shared_from_this());
         return std::move(std::bind(&ThreadContext::scheduleToRun, _context, std::move(run)));
       }
 
     public:
       virtual void chainNext(const std::shared_ptr<PromiseNode>& node) override {
         if (node == this) {
-          throw std::exception("");
-        }
-
-        // check self has been chained a node
-        if (_forward.hasChained()) {
-          throw std::exception("");
+          throw std::logic_error("invalid chaining state");
         }
 
         auto fulfill = std::static_pointer_cast<Fulfill<ArgType>>(node);
-
-        if (fulfill->isAttached()) {
-          throw std::exception("");
-        }
-
         _forward.doChaining(fulfill, node->acquireNotify());
       }
 
@@ -251,7 +337,7 @@ namespace Promise2 {
         // warpped the exception
         try {
           _forward.fulfill(
-            _onFulfill(std::forward<T>(preFulfilled));
+            _onFulfill(std::forward<T>(preFulfilled))
           );
         } catch (...) {
           runReject();
@@ -276,8 +362,8 @@ namespace Promise2 {
       }
 
     private:
-      PromiseNode(PromiseNode&& node) = delete;
-      PromiseNode(const PromiseNode&) = delete;
+      PromiseNodeInternal(PromiseNodeInternal&& node) = delete;
+      PromiseNodeInternal(const PromiseNodeInternal&) = delete;
     };
   }
 }
