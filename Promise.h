@@ -16,7 +16,31 @@ namespace Promise2 {
   //
   template<typename T>
   class PromiseDefer {
+  private:
+    Details::DeferPromiseCore<T> _core;
 
+  public:
+    PromiseDefer(const Details::DeferPromiseCore<T>& core)
+      : _core{ core }
+    {}
+
+    PromiseDefer(PromiseDefer&&) = default;
+    ~PromiseDefer() = default;
+
+
+  public:
+    template<T>
+    void setResult(T&& r) {
+      _core->setValue(std::forward<T>(r));
+    }
+
+    void setException(std::exception_ptr e) {
+      _core->setException(e);
+    }
+
+  private:
+    PromiseDefer(const PromiseDefer&) = delete;
+    PromiseDefer& operator = (const PromiseDefer&) = delete;
   };
 
   //
@@ -41,23 +65,23 @@ namespace Promise2 {
     }
 
     Promise(Promise&& promise)
-      : _node{ std::move(promise._node }
+      : _node{ std::move(promise._node) }
     {}
 
     Promise& operator = (Promise&& promise) {
-      _node = std::move(promise._node;
+      _node = std::move(promise._node);
     }
 
   public:
     template<typename NextT>
     Promise<NextT> then(std::function<NextT(T)>&& onFulfill, 
                         std::function<void(std::exception_ptr)>&& onReject, 
-                        const ThreadContext& context) {
+                        ThreadContext* &&context) {
       if (!isValid()) {
         throw std::logic_error("invalid promise");
       }
 
-      auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), context);
+      auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
       _node->chainNext(nextNode);
 
       // all OK, return the wrapped object
