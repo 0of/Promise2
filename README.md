@@ -9,8 +9,11 @@ c++14 compliant cross-platform implementations of promise
 
 # API References
 ## Promise\<T\>
-- Promise(std::function<T(void)>&& task, const ThreadContext& context)
+- Promise(std::function\<T(void)\>&& task, const ThreadContext& context)
 > construct a promise with task and thread context(which thread is running at)
+
+- Promise(std::function\<T(PromiseDefer&& defer)\>&& task, ThreadContext* &&context)
+> construct a promise with deferred task and threa context
 
 - template\<typename NextT\> Promise\<NextT\> then(std::function\<NextT(T)\>&& onFulfill, std::function<void(std::exception_ptr)>&& onReject, const ThreadContext& context) 
 > chainify current promise to the next one
