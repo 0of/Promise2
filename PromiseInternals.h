@@ -30,10 +30,15 @@ namespace Promise2 {
 
 namespace Promise2 {
   namespace Details {
+    //
+    template<typename FulfillArgType>
+    class Fulfill;
+
   	//
   	// each `Promise` will hold one shared `PromiseNode`
   	//
-  	class PromiseNode {
+    template<typename T>
+    class PromiseNode {
     public:
       virtual ~PromiseNode() = default;
 
@@ -42,12 +47,10 @@ namespace Promise2 {
       virtual void run() = 0;
 
     public:
-      virtual void chainNext(const std::shared_ptr<PromiseNode>& ) = 0;
-
-      virtual std::function<void()> acquireNotify() = 0;
+      virtual void chainNext(const std::shared_ptr<Fulfill<T>>&, std::function<void()>&& notify) = 0;
     };
 
-    class SharedPromiseEBC {
+    class PromiseValueBase {
     protected:
       std::exception_ptr _exception;
 
@@ -55,7 +58,7 @@ namespace Promise2 {
       std::atomic_bool _hasAssigned;
 
     protected:
-      SharedPromiseEBC()
+      PromiseValueBase()
         : _exception{ nullptr }
         , _assignGuard{ ATOMIC_FLAG_INIT }
         , _hasAssigned{ false }
@@ -93,23 +96,23 @@ namespace Promise2 {
       }
 
     private:
-      SharedPromiseEBC(const SharedPromiseEBC&) = delete;
-      SharedPromiseEBC(const SharedPromiseEBC&&) = delete;
+      PromiseValueBase(const PromiseValueBase&) = delete;
+      PromiseValueBase(const PromiseValueBase&&) = delete;
     };
 
 
     template<typename T>
-    class SharedPromise : public SharedPromiseEBC {
+    class PromiseValue : public PromiseValueBase {
     public:
       // allow to direct access
       T value;
 
     public:
-      SharedPromise()
+      PromiseValue()
         : value()
       {}
 
-      ~SharedPromise() = default;
+      ~PromiseValue() = default;
 
     public:
       template<typename ValueType>
@@ -125,10 +128,10 @@ namespace Promise2 {
     };
 
     template<>
-    class SharedPromise<void> : public SharedPromiseEBC {
+    class PromiseValue<void> : public PromiseValueBase {
     public:
-      SharedPromise() = default;
-      ~SharedPromise() = default;
+      PromiseValue() = default;
+      ~PromiseValue() = default;
 
     public:
       void setValue() {
@@ -143,27 +146,19 @@ namespace Promise2 {
 
     //
     //  @alias
-    //    
-    template<typename T> using DeferPromiseCore = std::shared_ptr<SharedPromise<T>>;
+    //
+    template<typename T> using SharedPromiseValue = std::shared_ptr<PromiseValue<T>>;
 
 
-    //
-    // fulfill traits
-    //
     template<typename FulfillArgType>
-    class Fulfill {
-    private:
-      DeferPromiseCore<FulfillArgType> _previousPromise;
-      std::atomic_flag _attachGuard;
-
+    class FulfillGet {
     protected:
-      Fulfill()
-        : _previousPromise()
-        , _attachGuard{ ATOMIC_FLAG_INIT }
-      {}
+      SharedPromiseValue<FulfillArgType> _previousPromise;
 
     public:
-      virtual ~Fulfill() = default;
+      bool isAttached() const {
+        return !!_previousPromise;
+      }
 
     protected:
       FulfillArgType get() {
@@ -174,18 +169,53 @@ namespace Promise2 {
         _previousPromise->accessGuard();
         return _previousPromise->value;
       }
+    };
 
-      void attach(const DeferPromiseCore<FulfillArgType>& previousPromise) {
+    template<>
+    class FulfillGet<void> {
+    protected:
+      SharedPromiseValue<void> _previousPromise;
+
+    public:
+      bool isAttached() const {
+        return !!_previousPromise;
+      }
+
+    protected:
+      void get() {
+        if (!isAttached()) {
+          throw std::logic_error("invalid promise state");
+        }
+
+        _previousPromise->accessGuard();
+      }
+    };
+
+    //
+    // fulfill traits
+    //
+    template<typename FulfillArgType>
+    class Fulfill : public FulfillGet<FulfillArgType> {
+    private:
+      std::atomic_flag _attachGuard;
+
+    protected:
+      Fulfill()
+        : FulfillGet<FulfillArgType>()
+        , _attachGuard{ ATOMIC_FLAG_INIT }
+      {}
+
+    public:
+      virtual ~Fulfill() = default;
+
+    protected:
+      void attach(const SharedPromiseValue<FulfillArgType>& previousPromise) {
         if (_attachGuard.test_and_set()) {
           // already attached or is attaching
           throw std::logic_error("promise duplicated attachments");
         }
 
-        _previousPromise = previousPromise;
-      }
-
-      bool isAttached() const {
-        return !!_previousPromise;
+        FulfillGet<FulfillArgType>::_previousPromise = previousPromise;
       }
     };
 
@@ -195,7 +225,7 @@ namespace Promise2 {
     template<typename ForwardType>
     class Forward {
     private:
-      DeferPromiseCore<ForwardType> _promise;
+      SharedPromiseValue<ForwardType> _promise;
 
       std::function<void()> _notify;
 
@@ -204,20 +234,14 @@ namespace Promise2 {
 
     public:
       Forward()
-        : _chainingGuard{ ATOMIC_FLAG_INIT }
+        : _promise{ }
+        , _chainingGuard{ ATOMIC_FLAG_INIT }
         , _hasChained{ false } 
       {}
       ~Forward() = default;
 
     public:
-      void notify() {
-        if (_notify) {
-          _notify();
-        }
-      }
-
-    public:
-      void doChaining(Fulfill<ForwardType>& fulfill, std::function<void()>&& notify) {
+      void doChaining(const std::shared_ptr<Fulfill<ForwardType>>& fulfill, std::function<void()>&& notify) {
         if (_chainingGuard.test_and_set()) {
           // already chained or is chaining
           throw std::logic_error("promise duplicated chainings");
@@ -225,7 +249,7 @@ namespace Promise2 {
 
         try {
 
-          fulfill.attach(_promise);
+          fulfill->attach(_promise);
 
           // update notifier
           _notify = std::move(notify);
@@ -248,10 +272,16 @@ namespace Promise2 {
       template<typename T>
       void fulfill(T&& value) {
         _promise.setValue(std::forward<T>(value));
+        if (_notify) {
+          _notify();
+        }
       }
 
       void reject(std::exception_ptr exception) {
         _promise.setException(exception);
+        if (_notify) {
+          _notify();
+        }
       }
 
       bool hasChained() const {
@@ -259,22 +289,25 @@ namespace Promise2 {
       }
     };
 
-    template<typename ReturnType, typename ArgType, typename ForwardTrait>
+    template<typename ReturnType, typename ArgType>
     class PromiseNodeInternal;
 
-    template<typename ReturnType, typename ArgType, typename ForwardTrait>
-    using EnableShared = std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType, ForwardTrait>>;
+    //
+    //  @alias
+    //
+    template<typename ReturnType, typename ArgType>
+    using EnableShared = std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType>>;
+
+    template<typename T> using DeferPromiseCore = std::unique_ptr<Forward<T>>;
     //
     // Promise node
     //
-	 template<typename ReturnType, typename ArgType, 
-           typename ForwardTrait = Forward<ReturnType>>
-    class PromiseNodeInternal : public PromiseNode
-                              , public Fulfill<ArgType>
-                              , EnableShared<ReturnType, ArgType, ForwardTrait> {
+	 template<typename ReturnType, typename ArgType>
+    class PromiseNodeInternal : public PromiseNode<ReturnType>
+                              , public Fulfill<ArgType> {
     private:
-      ForwardTrait _forward;
-      
+      DeferPromiseCore<ReturnType> _forward;
+
       std::shared_ptr<ThreadContext> _context;
 
       std::function<ReturnType(ArgType)> _onFulfill;
@@ -286,8 +319,9 @@ namespace Promise2 {
       PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   std::shared_ptr<ThreadContext>&& context)
-        : PromiseNode()
+        : PromiseNode<ReturnType>()
         , Fulfill<ArgType>()
+        , _forward{ std::make_unique<DeferPromiseCore<ReturnType>::element_type>() }
         , _onFulfill{ std::move(onFulfill) }
         , _onReject{ std::move(onReject) }
         , _context{ std::move(context) }
@@ -295,57 +329,45 @@ namespace Promise2 {
 
     public:
       virtual void run() override {
-            // ensure calling once
         std::call_once(_called, [&]() {
-
-          bool safelyDone = false;
+          ArgType preValue;
 
           try {
-            safelyDone = runFulfill(Fulfill<ArgType>::get());
+            preValue = Fulfill<ArgType>::get();
+          } catch (...) {
+            runReject();
+            return;
+          }
+
+          try {
+            runFulfill(preValue);
           } catch (...) {
             // previous task is failed
             runReject();
           }
-
-          // in some case, previous one already failed
-          // propage the exception
-          if (!safelyDone) {
-            // clean the status
-            _forward.notify();
-          }
         });
       }
 
-      virtual std::function<void()> acquireNotify() override {
-        auto&& run = std::bind(&PromiseNode::run, EnableShared<ReturnType, ArgType, ForwardTrait>::shared_from_this());
-        return std::move(std::bind(&ThreadContext::scheduleToRun, _context, std::move(run)));
-      }
-
     public:
-      virtual void chainNext(const std::shared_ptr<PromiseNode>& node) override {
-        if (node == this) {
+      virtual void chainNext(const std::shared_ptr<Fulfill<ReturnType>>& fulfill, std::function<void()>&& notify) override {
+        if (fulfill == this) {
           throw std::logic_error("invalid chaining state");
         }
 
-        auto fulfill = std::static_pointer_cast<Fulfill<ArgType>>(node);
-        _forward.doChaining(fulfill, node->acquireNotify());
+        _forward->doChaining(fulfill, std::move(notify));
       }
 
     protected:
       template<typename T>
-      bool runFulfill(T&& preFulfilled) noexcept {
+      void runFulfill(T&& preFulfilled) noexcept {
         // warpped the exception
         try {
-          _forward.fulfill(
+          _forward->fulfill(
             _onFulfill(std::forward<T>(preFulfilled))
           );
         } catch (...) {
           runReject();
         }
-
-        // I'm done!
-        _forward.notify();
-        return true;
       }
 
       // called when exception has been thrown
@@ -354,10 +376,10 @@ namespace Promise2 {
           try {
             _onReject(std::current_exception());
           } catch (...) {
-            _forward.reject(std::current_exception());
+            _forward->reject(std::current_exception());
           }
         } else {
-          _forward.reject(std::current_exception());
+          _forward->reject(std::current_exception());
         }
       }
 

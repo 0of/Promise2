@@ -1,3 +1,4 @@
+
 /*
  * Promise2
  *
@@ -27,7 +28,6 @@ namespace Promise2 {
     PromiseDefer(PromiseDefer&&) = default;
     ~PromiseDefer() = default;
 
-
   public:
     template<T>
     void setResult(T&& r) {
@@ -49,7 +49,7 @@ namespace Promise2 {
   template<typename T>
   class Promise {
   private:
-    std::shared_ptr<Details::PromiseNode> _node; 
+    std::shared_ptr<Details::PromiseNode<T>> _node; 
 
   public:
     // empty constructor
@@ -61,7 +61,13 @@ namespace Promise2 {
       _node = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(task), 
                     std::function<void(std::exception_ptr)>(), std::move(context));
 
-      context->scheduleToRun(&Details::PromiseNode::run, _node);
+      context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
+    }
+
+    // constructor with 
+    Promise(std::function<T(PromiseDefer<T>&& defer)>&& task, ThreadContext* &&context)
+      : _node() {
+     
     }
 
     Promise(Promise&& promise)
@@ -81,8 +87,12 @@ namespace Promise2 {
         throw std::logic_error("invalid promise");
       }
 
+      auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
+
       auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
-      _node->chainNext(nextNode);
+      _node->chainNext(nextNode, [&]() {
+        sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
+      });
 
       // all OK, return the wrapped object
       Promise<NextT> nextPromise;
