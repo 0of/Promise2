@@ -26,6 +26,8 @@ namespace Promise2 {
   public:
     virtual void scheduleToRun(std::function<void()>&& task) = 0;
   };
+
+
 }
 
 namespace Promise2 {
@@ -299,54 +301,26 @@ namespace Promise2 {
     using EnableShared = std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType>>;
 
     template<typename T> using DeferPromiseCore = std::unique_ptr<Forward<T>>;
-    //
-    // Promise node
-    //
-	 template<typename ReturnType, typename ArgType>
-    class PromiseNodeInternal : public PromiseNode<ReturnType>
-                              , public Fulfill<ArgType> {
-    private:
-      DeferPromiseCore<ReturnType> _forward;
 
+    template<typename ReturnType, typename ArgType>
+    class PromiseNodeInternalBase : public PromiseNode<ReturnType>
+                              , public Fulfill<ArgType> {
+    protected:
+      DeferPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
 
-      std::function<ReturnType(ArgType)> _onFulfill;
       std::function<void(std::exception_ptr)> _onReject;
-
       std::once_flag _called;
 
     public:
-      PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
-                  std::function<void(std::exception_ptr)>&& onReject,
+      PromiseNodeInternalBase(std::function<void(std::exception_ptr)>&& onReject,
                   std::shared_ptr<ThreadContext>&& context)
         : PromiseNode<ReturnType>()
         , Fulfill<ArgType>()
         , _forward{ std::make_unique<DeferPromiseCore<ReturnType>::element_type>() }
-        , _onFulfill{ std::move(onFulfill) }
         , _onReject{ std::move(onReject) }
         , _context{ std::move(context) }
       {}
-
-    public:
-      virtual void run() override {
-        std::call_once(_called, [&]() {
-          ArgType preValue;
-
-          try {
-            preValue = Fulfill<ArgType>::get();
-          } catch (...) {
-            runReject();
-            return;
-          }
-
-          try {
-            runFulfill(preValue);
-          } catch (...) {
-            // previous task is failed
-            runReject();
-          }
-        });
-      }
 
     public:
       virtual void chainNext(const std::shared_ptr<Fulfill<ReturnType>>& fulfill, std::function<void()>&& notify) override {
@@ -358,18 +332,6 @@ namespace Promise2 {
       }
 
     protected:
-      template<typename T>
-      void runFulfill(T&& preFulfilled) noexcept {
-        // warpped the exception
-        try {
-          _forward->fulfill(
-            _onFulfill(std::forward<T>(preFulfilled))
-          );
-        } catch (...) {
-          runReject();
-        }
-      }
-
       // called when exception has been thrown
       void runReject() noexcept {
         if (_onReject) {
@@ -384,10 +346,140 @@ namespace Promise2 {
       }
 
     private:
-      PromiseNodeInternal(PromiseNodeInternal&& node) = delete;
-      PromiseNodeInternal(const PromiseNodeInternal&) = delete;
+      PromiseNodeInternalBase(PromiseNodeInternalBase&& node) = delete;
+      PromiseNodeInternalBase(const PromiseNodeInternalBase&) = delete;
     };
+
+    //
+    // Promise node
+    //
+	  template<typename ReturnType, typename ArgType>
+    class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
+
+    private:
+      std::function<ReturnType(ArgType)> _onFulfill;
+
+    public:
+      PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  std::shared_ptr<ThreadContext>&& context)
+        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), std::move(context) }
+        , _onFulfill{ std::move(onFulfill) }
+      {}
+
+    public:
+      virtual void run() override {
+        std::call_once(Base::_called, [&]() {
+          ArgType preValue;
+
+          try {
+            preValue = Fulfill<ArgType>::get();
+          } catch (...) {
+            Base::runReject();
+            return;
+          }
+
+          try {
+            runFulfill(preValue);
+          } catch (...) {
+            // previous task is failed
+            Base::runReject();
+          }
+        });
+      }
+
+    protected:
+      template<typename T>
+      void runFulfill(T&& preFulfilled) noexcept {
+        // warpped the exception
+        try {
+          Base::_forward->fulfill(
+            _onFulfill(std::forward<T>(preFulfilled))
+          );
+        } catch (...) {
+          Base::runReject();
+        }
+      }
+    }; 
+  // end of details
   }
+}
+
+namespace Promise2 {
+  //
+  // @class PromiseDefer
+  //
+  template<typename T>
+  class PromiseDefer {
+  private:
+    Details::DeferPromiseCore<T> _core;
+
+  public:
+    PromiseDefer(Details::DeferPromiseCore<T>&& core)
+      : _core{ std::move(core) }
+    {}
+
+    PromiseDefer(PromiseDefer&&) = default;
+    ~PromiseDefer() = default;
+
+  public:
+    template<T>
+    void setResult(T&& r) {
+      _core->setValue(std::forward<T>(r));
+    }
+
+    void setException(std::exception_ptr e) {
+      _core->setException(e);
+    }
+
+  private:
+    PromiseDefer(const PromiseDefer&) = delete;
+    PromiseDefer& operator = (const PromiseDefer&) = delete;
+  };
+}
+
+namespace Promise2 {
+  namespace Details {
+    // deferred PromiseNodeInternal
+    template<typename ReturnType, typename ArgType>
+    class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
+
+    private:
+      std::function<void(PromiseDefer<ReturnType>&&, ArgType)> _onFulfill;
+
+    public:
+      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&, ArgType)>& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  std::shared_ptr<ThreadContext>&& context)
+        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), std::move(context) }
+        , _onFulfill{ std::move(onFulfill) }
+      {}
+
+    public:
+      virtual void run() override {
+        std::call_once(Base::_called, [&]() {
+          ArgType preValue;
+
+          try {
+            preValue = Fulfill<ArgType>::get();
+          } catch (...) {
+            Base::runReject();
+            return;
+          }
+
+          try {
+            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+            _onFulfill(deferred, preValue);
+          } catch (...) {
+            // previous task is failed
+            Base::runReject();
+          }
+        });
+      }
+    };
+  } // Details
 }
 
 #endif
