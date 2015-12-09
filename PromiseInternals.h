@@ -440,6 +440,9 @@ namespace Promise2 {
 }
 
 namespace Promise2 {
+  // declaration of Promise
+  template<typename T> class Promise;
+
   namespace Details {
     // deferred PromiseNodeInternal
     template<typename ReturnType, typename ArgType>
@@ -479,6 +482,26 @@ namespace Promise2 {
         });
       }
     };
+
+    // nesting promise PromiseNodeInternal
+     template<typename ReturnType, typename ArgType>
+    class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
+
+    private:
+      std::function<Promise<ReturnType>(ArgType)> _onFulfill;
+
+    public:
+      NestingPromiseNodeInternal(std::function<Promise<ReturnType>(ArgType)>& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  std::shared_ptr<ThreadContext>&& context)
+        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), std::move(context) }
+        , _onFulfill{ std::move(onFulfill) }
+      {}
+
+    public:
+      virtual void run() override;
+    };    
   } // Details
 }
 
