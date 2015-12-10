@@ -107,4 +107,36 @@ namespace Promise2 {
   };
 }
 
+namespace Promise2 {
+  namespace Details {
+    template<typename ReturnType, typename ArgType>
+    void NestingPromiseNodeInternal<ReturnType, ArgType>::run() {
+       std::call_once(Base::_called, [&]() {
+          ArgType preValue;
+
+          try {
+            preValue = Fulfill<ArgType>::get();
+          } catch (...) {
+            Base::runReject();
+            return;
+          }
+
+          try {
+            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+
+            // return a promise will hold the return value
+            _onFulfill(preValue).then([&](ReturnType v){
+              deferred.setResult(v);
+            });
+
+          } catch (...) {
+            // previous task is failed
+            Base::runReject();
+          }
+      });
+    }
+  } // Details
+} // Promise2
+
+
 #endif // PROMISE_H
