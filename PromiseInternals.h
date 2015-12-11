@@ -10,25 +10,13 @@
 
 #include <thread>
 #include <memory>
-#include <functional>
+
 #include <future>
 #include <atomic>
 #include <exception>
 
-namespace Promise2 {
-  // 
-  // @class ThreadContext
-  //
-  class ThreadContext {
-  public:
-    virtual ~ThreadContext() = default;
+#include "PromisePublicAPIs.h"
 
-  public:
-    virtual void scheduleToRun(std::function<void()>&& task) = 0;
-  };
-
-
-}
 
 namespace Promise2 {
   namespace Details {
@@ -300,8 +288,6 @@ namespace Promise2 {
     template<typename ReturnType, typename ArgType>
     using EnableShared = std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType>>;
 
-    template<typename T> using DeferPromiseCore = std::unique_ptr<Forward<T>>;
-
     template<typename ReturnType, typename ArgType>
     class PromiseNodeInternalBase : public PromiseNode<ReturnType>
                               , public Fulfill<ArgType> {
@@ -411,32 +397,20 @@ namespace Promise2 {
   // @class PromiseDefer
   //
   template<typename T>
-  class PromiseDefer {
-  private:
-    Details::DeferPromiseCore<T> _core;
+  PromiseDefer<T>::PromiseDefer(Details::DeferPromiseCore<T>&& core)
+    : _core{ std::move(core) }
+  {}
 
-  public:
-    PromiseDefer(Details::DeferPromiseCore<T>&& core)
-      : _core{ std::move(core) }
-    {}
+  template<typename T>
+  template<typename X>
+  void PromiseDefer<T>::setResult(X&& r) {
+    _core->setValue(std::forward<X>(r));
+  }
 
-    PromiseDefer(PromiseDefer&&) = default;
-    ~PromiseDefer() = default;
-
-  public:
-    template<T>
-    void setResult(T&& r) {
-      _core->setValue(std::forward<T>(r));
-    }
-
-    void setException(std::exception_ptr e) {
-      _core->setException(e);
-    }
-
-  private:
-    PromiseDefer(const PromiseDefer&) = delete;
-    PromiseDefer& operator = (const PromiseDefer&) = delete;
-  };
+  template<typename T>
+  void PromiseDefer<T>::setException(std::exception_ptr e) {
+    _core->setException(e);
+  }
 }
 
 namespace Promise2 {
@@ -484,7 +458,7 @@ namespace Promise2 {
     };
 
     // nesting promise PromiseNodeInternal
-     template<typename ReturnType, typename ArgType>
+    template<typename ReturnType, typename ArgType>
     class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
 
