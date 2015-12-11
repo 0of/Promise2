@@ -9,102 +9,84 @@
 #ifndef PROMISE_H
 #define PROMISE_H
 
+#include "PromisePublicAPIs.h"
 #include "PromiseInternals.h"
 
 namespace Promise2 {
 
-  //
-  // @class Promise
-  //
-  template<typename T>
-  class Promise {
-  private:
-    std::shared_ptr<Details::PromiseNode<T>> _node; 
 
-  public:
-    // empty constructor
-    Promise() = default;
-    
-    // constructor with task and running context
-    Promise(std::function<T(void)>&& task, ThreadContext* &&context)
+  template<typename T>
+  Promise<T>::Promise(std::function<T(void)>&& task, ThreadContext* &&context)
       : _node() {
       _node = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(task), 
                     std::function<void(std::exception_ptr)>(), std::move(context));
 
       context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
+  }
+
+  template<typename T>
+  Promise<T>::Promise(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context)
+    : _node() {
+   
+   _node = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(task), 
+                  std::function<void(std::exception_ptr)>(), std::move(context));
+
+    context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
+  }
+
+  template<typename T>
+  Promise<T>::Promise(Promise<T>&& promise)
+    : _node{ std::move(promise._node) }
+  {}
+
+  template<typename T>
+  Promise<T>& Promise<T>::operator = (Promise<T>&& promise) {
+    _node = std::move(promise._node);
+  }
+
+  template<typename T>
+  template<typename NextT>
+  Promise<NextT> Promise<T>::then(std::function<NextT(T)>&& onFulfill, 
+                      std::function<void(std::exception_ptr)>&& onReject, 
+                      ThreadContext* &&context) {
+    if (!isValid()) {
+      throw std::logic_error("invalid promise");
     }
 
-    // constructor with deferred task
-    Promise(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context)
-      : _node() {
-     
-     _node = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(task), 
-                    std::function<void(std::exception_ptr)>(), std::move(context));
+    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
 
-      context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
+    auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
+    _node->chainNext(nextNode, [&]() {
+      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
+    });
+
+    // all OK, return the wrapped object
+    Promise<NextT> nextPromise;
+    nextPromise._node = nextNode;
+    return nextPromise;
+  }
+
+  template<typename T>
+  template<typename NextT>
+  Promise<NextT> Promise<T>::then(std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill,
+                      std::function<void(std::exception_ptr)>&& onReject, 
+                      ThreadContext* &&context) {
+    if (!isValid()) {
+      throw std::logic_error("invalid promise");
     }
 
-    Promise(Promise&& promise)
-      : _node{ std::move(promise._node) }
-    {}
+    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
 
-    Promise& operator = (Promise&& promise) {
-      _node = std::move(promise._node);
-    }
+    auto nextNode = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
+    _node->chainNext(nextNode, [&]() {
+      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
+    });
 
-  public:
-    template<typename NextT>
-    Promise<NextT> then(std::function<NextT(T)>&& onFulfill, 
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) {
-      if (!isValid()) {
-        throw std::logic_error("invalid promise");
-      }
-
-      auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
-
-      auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
-      _node->chainNext(nextNode, [&]() {
-        sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
-      });
-
-      // all OK, return the wrapped object
-      Promise<NextT> nextPromise;
-      nextPromise._node = nextNode;
-      return nextPromise;
-    }
-
-    template<typename NextT>
-    Promise<NextT> then(std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) {
-      if (!isValid()) {
-        throw std::logic_error("invalid promise");
-      }
-
-      auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
-
-      auto nextNode = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
-      _node->chainNext(nextNode, [&]() {
-        sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
-      });
-
-      // all OK, return the wrapped object
-      Promise<NextT> nextPromise;
-      nextPromise._node = nextNode;
-      return nextPromise;
-    }
-
-
-  public:
-    bool isValid() const {
-      return !!_node;
-    }
-
-  private:
-    Promise(const Promise& ) = delete;
-    Promise& operator = (const Promise& ) = delete;
-  };
+    // all OK, return the wrapped object
+    Promise<NextT> nextPromise;
+    nextPromise._node = nextNode;
+    return nextPromise;
+  }
 }
 
 namespace Promise2 {
