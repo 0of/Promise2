@@ -1,17 +1,19 @@
 /*
- * Promise2
- *
- * Copyright (c) 2015 "0of" Magnus
- * Licensed under the MIT license.
- * https://github.com/0of/Promise2/blob/master/LICENSE
- */
+* Promise2
+*
+* Copyright (c) 2015 "0of" Magnus
+* Licensed under the MIT license.
+* https://github.com/0of/Promise2/blob/master/LICENSE
+*/
 
- #ifndef PROMISE_PUBLIC_APIS_H
- #define PROMISE_PUBLIC_APIS_H
+#ifndef PROMISE_PUBLIC_APIS_H
+#define PROMISE_PUBLIC_APIS_H
+
+#include <functional>
+#include <memory>
  
- #include <functional>
- #include <memory>
- 
+#include "PromiseConfig.h"
+
 namespace Promise2 {
 	// declarations
 	namespace Details {
@@ -32,6 +34,7 @@ namespace Promise2 {
     virtual void scheduleToRun(std::function<void()>&& task) = 0;
   };
 
+#if DEFERRED_PROMISE
   //
   // @class PromiseDefer
   //
@@ -55,6 +58,7 @@ namespace Promise2 {
     PromiseDefer(const PromiseDefer<T>&) = delete;
     PromiseDefer& operator = (const PromiseDefer<T>&) = delete;
   };
+#endif // DEFERRED_PROMISE
 
   //
   // @class Promise
@@ -71,24 +75,28 @@ namespace Promise2 {
     // constructor with task and running context
     Promise(std::function<T(void)>&& task, ThreadContext* &&context);
 
+#if DEFERRED_PROMISE
     // constructor with deferred task
     Promise(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context);
+#endif // DEFERRED_PROMISE
 
   	Promise(Promise<T>&& promise);
 
   	Promise<T>& operator = (Promise<T>&& promise);
-  	
+
 	public:
-		template<typename NextT>
+    template<typename NextT>
     Promise<NextT> then(std::function<NextT(T)>&& onFulfill, 
                         std::function<void(std::exception_ptr)>&& onReject, 
                         ThreadContext* &&context);
 
+#if DEFERRED_PROMISE
     template<typename NextT>
     Promise<NextT> then(std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill,
                         std::function<void(std::exception_ptr)>&& onReject, 
                         ThreadContext* &&context);
-
+#endif // DEFERRED_PROMISE
+    
   public:
     bool isValid() const {
       return !!_node;
