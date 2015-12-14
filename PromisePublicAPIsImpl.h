@@ -2,7 +2,15 @@
 #define PROMISE_PUBLIC_AP_ISIMPL_H
 
 #include "PromisePublicAPIs.h"
-#include "PromiseInternals.h"
+#include "PromiseInternalsBase.h"
+
+#if DEFERRED_PROMISE
+#include "DeferredPromiseInternals.h"
+#endif
+
+#if NESTING_PROMISE
+#include "NestingPromiseInternals.h"
+#endif
 
 namespace Promise2 {
 template<typename T>
@@ -81,37 +89,6 @@ template<typename T>
     return nextPromise;
   }
 #endif // DEFERRED_PROMISE
-} // Promise2
-
-namespace Promise2 {
-  namespace Details {
-    template<typename ReturnType, typename ArgType>
-    void NestingPromiseNodeInternal<ReturnType, ArgType>::run() {
-       std::call_once(Base::_called, [&]() {
-          ArgType preValue;
-
-          try {
-            preValue = Fulfill<ArgType>::get();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
-
-          try {
-            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
-
-            // return a promise will hold the return value
-            _onFulfill(preValue).then([&](ReturnType v){
-              deferred.setResult(v);
-            });
-
-          } catch (...) {
-            // previous task is failed
-            Base::runReject();
-          }
-      });
-    }
-  } // Details
 } // Promise2
 
 #endif // PROMISE_PUBLIC_AP_ISIMPL_H
