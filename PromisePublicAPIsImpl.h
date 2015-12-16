@@ -34,6 +34,18 @@ template<typename T>
   }
 #endif // DEFERRED_PROMISE
 
+#if NESTING_PROMISE
+    template<typename T>
+    Promise<T>::Promise(std::function<Promise<T>()>&& task, ThreadContext* &&context)
+        : _node() {
+   
+   		_node = std::make_shared<Details::NestingPromiseNodeInternal<T, void>>(std::move(task), 
+                  std::function<void(std::exception_ptr)>(), std::move(context));
+
+    context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
+  }
+#endif // NESTING_PROMISE
+
   template<typename T>
   Promise<T>::Promise(Promise<T>&& promise)
     : _node{ std::move(promise._node) }
@@ -89,6 +101,30 @@ template<typename T>
     return nextPromise;
   }
 #endif // DEFERRED_PROMISE
+
+#if NESTING_PROMISE
+  template<typename T>
+  template<typename NextT>
+  Promise<NextT> Promise<T>::then(std::function<Promise<NextT>(T)>&& onFulfill,
+                        std::function<void(std::exception_ptr)>&& onReject, 
+                        ThreadContext* &&context) {
+		if (!isValid()) {
+      throw std::logic_error("invalid promise");
+    }
+
+    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
+
+    auto nextNode = std::make_shared<Details::NestingPromiseNodeInternal<NextT, T>>(std::move(onFulfill), std::move(onReject), std::move(context));
+    _node->chainNext(nextNode, [&]() {
+      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
+    });
+
+    // all OK, return the wrapped object
+    Promise<NextT> nextPromise;
+    nextPromise._node = nextNode;
+    return nextPromise;
+	}
+#endif // NESTING_PROMISE
 } // Promise2
 
 #endif // PROMISE_PUBLIC_AP_ISIMPL_H
