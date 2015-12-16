@@ -80,6 +80,11 @@ namespace Promise2 {
     Promise(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context);
 #endif // DEFERRED_PROMISE
 
+#if NESTING_PROMISE
+    // constructor with nesting promise task
+    Promise(std::function<Promise<T>()>&& task, ThreadContext* &&context);
+#endif // NESTING_PROMISE
+
   	Promise(Promise<T>&& promise);
 
   	Promise<T>& operator = (Promise<T>&& promise);
@@ -96,6 +101,13 @@ namespace Promise2 {
                         std::function<void(std::exception_ptr)>&& onReject, 
                         ThreadContext* &&context);
 #endif // DEFERRED_PROMISE
+
+#if NESTING_PROMISE
+    template<typename NextT>
+    Promise<NextT> then(std::function<Promise<NextT>(T)>&& onFulfill,
+                        std::function<void(std::exception_ptr)>&& onReject, 
+                        ThreadContext* &&context);
+#endif // NESTING_PROMISE
     
   public:
     bool isValid() const {
