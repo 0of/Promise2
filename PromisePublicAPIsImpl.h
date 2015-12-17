@@ -13,62 +13,59 @@
 #endif
 
 namespace Promise2 {
-template<typename T>
-  Promise<T>::Promise(std::function<T(void)>&& task, ThreadContext* &&context)
-      : _node() {
-      _node = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(task), 
-                    std::function<void(std::exception_ptr)>(), std::move(context));
 
-      context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
-  }
+	template<typename T>
+	Promise<T> PromiseSpawner<T>::New(std::function<T(void)>&& task, ThreadContext* &&context) {
+		Promise<T> spawned;
+	  auto node = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(task), 
+	                std::function<void(std::exception_ptr)>(), std::move(context));
+
+	  context->scheduleToRun(&Details::PromiseNode<T>::run, node);
+
+	  spawned._node = node;
+	  return spawned;
+	}
 
 #if DEFERRED_PROMISE
-  template<typename T>
-  Promise<T>::Promise(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context)
-    : _node() {
-   
-   _node = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(task), 
-                  std::function<void(std::exception_ptr)>(), std::move(context));
+		template<typename T>
+	  Promise<T> PromiseSpawner<T>::New(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context) {
+	  	Promise<T> spawned;
+		  auto node = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(task), 
+		                std::function<void(std::exception_ptr)>(), std::move(context));
 
-    context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
-  }
+		  context->scheduleToRun(&Details::PromiseNode<T>::run, node);
+
+		  spawned._node = node;
+		  return spawned;
+	  }
 #endif // DEFERRED_PROMISE
 
 #if NESTING_PROMISE
-    template<typename T>
-    Promise<T>::Promise(std::function<Promise<T>()>&& task, ThreadContext* &&context)
-        : _node() {
-   
-   		_node = std::make_shared<Details::NestingPromiseNodeInternal<T, void>>(std::move(task), 
-                  std::function<void(std::exception_ptr)>(), std::move(context));
+		template<typename T>
+	  Promise<T> PromiseSpawner<T>::New(std::function<Promise<T>()>&& task, ThreadContext* &&context) {
+	  	Promise<T> spawned;
+		  auto node = std::make_shared<Details::NestingPromiseNodeInternal<T, void>>(std::move(task), 
+		                std::function<void(std::exception_ptr)>(), std::move(context));
 
-    context->scheduleToRun(&Details::PromiseNode<T>::run, _node);
-  }
+		  context->scheduleToRun(&Details::PromiseNode<T>::run, node);
+
+		  spawned._node = node;
+		  return spawned;
+	  }
 #endif // NESTING_PROMISE
 
-  template<typename T>
-  Promise<T>::Promise(Promise<T>&& promise)
-    : _node{ std::move(promise._node) }
-  {}
 
-  template<typename T>
-  Promise<T>& Promise<T>::operator = (Promise<T>&& promise) {
-    _node = std::move(promise._node);
-  }
-
-  template<typename T>
-  template<typename NextT>
-  Promise<NextT> Promise<T>::then(std::function<NextT(T)>&& onFulfill, 
-                      std::function<void(std::exception_ptr)>&& onReject, 
-                      ThreadContext* &&context) {
-    if (!isValid()) {
-      throw std::logic_error("invalid promise");
-    }
+	template<typename T>
+	template<typename NextT, typename OnFulfill>
+  Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
+  										       OnFulfill&& onFulfill, 
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context) {
 
     auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
 
     auto nextNode = std::make_shared<Details::PromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
-    _node->chainNext(nextNode, [&]() {
+    node->chainNext(nextNode, [&]() {
       sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
     });
 
@@ -79,51 +76,45 @@ template<typename T>
   }
 
 #if DEFERRED_PROMISE
-  template<typename T>
-  template<typename NextT>
-  Promise<NextT> Promise<T>::then(std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill,
-                      std::function<void(std::exception_ptr)>&& onReject, 
-                      ThreadContext* &&context) {
-    if (!isValid()) {
-      throw std::logic_error("invalid promise");
+  	template<typename T>
+    template<typename NextT, typename OnFulfill>
+    Promise<NextT> PromiseThenable<T>::ThenDeferred(SharedPromiseNode<T>& node,
+                               OnFulfill&& onFulfill, 
+                               std::function<void(std::exception_ptr)>&& onReject, 
+                               ThreadContext* &&context) {
+    	auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
+
+	    auto nextNode = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
+	    node->chainNext(nextNode, [&]() {
+	      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
+	    });
+
+	    // all OK, return the wrapped object
+	    Promise<NextT> nextPromise;
+	    nextPromise._node = nextNode;
+	    return nextPromise;
     }
-
-    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
-
-    auto nextNode = std::make_shared<Details::DeferredPromiseNodeInternal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context));
-    _node->chainNext(nextNode, [&]() {
-      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
-    });
-
-    // all OK, return the wrapped object
-    Promise<NextT> nextPromise;
-    nextPromise._node = nextNode;
-    return nextPromise;
-  }
 #endif // DEFERRED_PROMISE
 
 #if NESTING_PROMISE
-  template<typename T>
-  template<typename NextT>
-  Promise<NextT> Promise<T>::then(std::function<Promise<NextT>(T)>&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) {
-		if (!isValid()) {
-      throw std::logic_error("invalid promise");
+    template<typename T>
+    template<typename NextT, typename OnFulfill>
+    Promise<NextT> PromiseThenable<T>::ThenNesting(SharedPromiseNode<T>& node, 
+    	                         OnFulfill&& onFulfill,
+                               std::function<void(std::exception_ptr)>&& onReject, 
+                               ThreadContext* &&context) {
+    	auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
+
+	    auto nextNode = std::make_shared<Details::NestingPromiseNodeInternal<NextT, T>>(std::move(onFulfill), std::move(onReject), std::move(context));
+	    node->chainNext(nextNode, [&]() {
+	      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
+	    });
+
+	    // all OK, return the wrapped object
+	    Promise<NextT> nextPromise;
+	    nextPromise._node = nextNode;
+	    return nextPromise;
     }
-
-    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
-
-    auto nextNode = std::make_shared<Details::NestingPromiseNodeInternal<NextT, T>>(std::move(onFulfill), std::move(onReject), std::move(context));
-    _node->chainNext(nextNode, [&]() {
-      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode);
-    });
-
-    // all OK, return the wrapped object
-    Promise<NextT> nextPromise;
-    nextPromise._node = nextNode;
-    return nextPromise;
-	}
 #endif // NESTING_PROMISE
 } // Promise2
 
