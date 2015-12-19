@@ -22,12 +22,24 @@ namespace Promise2 {
   template<typename T>
   template<typename X>
   void PromiseDefer<T>::setResult(X&& r) {
-    _core->setValue(std::forward<X>(r));
+    _core->fulfill(std::forward<X>(r));
   }
 
   template<typename T>
   void PromiseDefer<T>::setException(std::exception_ptr e) {
-    _core->setException(e);
+    _core->reject(e);
+  }
+
+  PromiseDefer<void>::PromiseDefer(Details::DeferPromiseCore<void>&& core)
+    : _core{ std::move(core) }
+  {}
+
+	void PromiseDefer<void>::setResult() {
+		_core->fulfill();
+	}
+
+  void PromiseDefer<void>::setException(std::exception_ptr e) {
+  	_core->reject(e);
   }
 }
 

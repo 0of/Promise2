@@ -63,6 +63,27 @@ namespace Promise2 {
     PromiseDefer(const PromiseDefer<T>&) = delete;
     PromiseDefer& operator = (const PromiseDefer<T>&) = delete;
   };
+
+  template<>
+  class PromiseDefer<void> {
+  private:
+    Details::DeferPromiseCore<void> _core;
+
+  public:
+    PromiseDefer(Details::DeferPromiseCore<void>&& core);
+
+    PromiseDefer(PromiseDefer<void>&&) = default;
+    ~PromiseDefer() = default;
+
+  public:
+    void setResult();
+
+    void setException(std::exception_ptr e);
+
+  private:
+    PromiseDefer(const PromiseDefer<void>&) = delete;
+    PromiseDefer<void>& operator = (const PromiseDefer<void>&) = delete;
+  };
 #endif // DEFERRED_PROMISE
 
   template<typename T>
