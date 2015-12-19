@@ -6,6 +6,7 @@
 #include <future>
 #include <atomic>
 #include <exception>
+#include <type_traits>
 
 namespace Promise2 {
   namespace Details {
@@ -198,6 +199,28 @@ namespace Promise2 {
       }
     };
 
+    template<typename ForwardType>
+    class ForwardFulfillPolicy {
+    public:
+    	template<typename T>
+    	static void wrappedFulfill(SharedPromiseValue<ForwardType>& promise, T&& value) {
+    		promise->setValue(std::forward<T>(value));
+    	}
+
+    	static void wrappedFulfill(SharedPromiseValue<void>& promise) {}
+    };
+
+    template<>
+    class ForwardFulfillPolicy<void> {
+    public:
+    	template<typename T>
+    	static void wrappedFulfill(SharedPromiseValue<void>& promise, T&& value) {}
+
+    	static void wrappedFulfill(SharedPromiseValue<void>& promise) {
+    		promise->setValue();
+    	}
+    };
+
     //
     // forward traits
     //
@@ -213,7 +236,7 @@ namespace Promise2 {
 
     public:
       Forward()
-        : _promise{ }
+        : _promise{ /* init */ }
         , _chainingGuard{ ATOMIC_FLAG_INIT }
         , _hasChained{ false } 
       {}
@@ -250,7 +273,16 @@ namespace Promise2 {
 
       template<typename T>
       void fulfill(T&& value) {
-        _promise.setValue(std::forward<T>(value));
+				ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise, std::forward<T>(value));
+
+        if (_notify) {
+          _notify();
+        }
+      }
+
+      void fulfill() {
+        ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise);
+
         if (_notify) {
           _notify();
         }
@@ -279,7 +311,7 @@ namespace Promise2 {
 
     template<typename ReturnType, typename ArgType>
     class PromiseNodeInternalBase : public PromiseNode<ReturnType>
-                              , public Fulfill<ArgType> {
+                              	  , public Fulfill<ArgType> {
     protected:
       DeferPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
@@ -328,7 +360,7 @@ namespace Promise2 {
     //
     // Promise node
     //
-	  template<typename ReturnType, typename ArgType>
+    template<typename ReturnType, typename ArgType>
     class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
 
@@ -371,6 +403,53 @@ namespace Promise2 {
         try {
           Base::_forward->fulfill(
             _onFulfill(std::forward<T>(preFulfilled))
+          );
+        } catch (...) {
+          Base::runReject();
+        }
+      }
+    }; 
+
+    template<typename ReturnType>
+    class PromiseNodeInternal<ReturnType, void> : public PromiseNodeInternalBase<ReturnType, void> {
+      using Base = PromiseNodeInternalBase<ReturnType, void>;
+
+    private:
+      std::function<ReturnType()> _onFulfill;
+
+    public:
+      PromiseNodeInternal(std::function<ReturnType()>&& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  std::shared_ptr<ThreadContext>&& context)
+        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), std::move(context) }
+        , _onFulfill{ std::move(onFulfill) }
+      {}
+
+    public:
+      virtual void run() override {
+        std::call_once(Base::_called, [&]() {
+          try {
+            Fulfill<void>::get();
+          } catch (...) {
+            Base::runReject();
+            return;
+          }
+
+          try {
+            runFulfill();
+          } catch (...) {
+            // previous task is failed
+            Base::runReject();
+          }
+        });
+      }
+
+    protected:
+      void runFulfill() noexcept {
+        // warpped the exception
+        try {
+          Base::_forward->fulfill(
+            _onFulfill()
           );
         } catch (...) {
           Base::runReject();
