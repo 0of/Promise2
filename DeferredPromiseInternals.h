@@ -83,6 +83,42 @@ namespace Promise2 {
         });
       }
     };
+
+    template<typename ReturnType>
+    class DeferredPromiseNodeInternal<ReturnType, void> : public PromiseNodeInternalBase<ReturnType, void> {
+      using Base = PromiseNodeInternalBase<ReturnType, void>;
+
+    private:
+      std::function<void(PromiseDefer<ReturnType>&&)> _onFulfill;
+
+    public:
+      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&)>& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  std::shared_ptr<ThreadContext>&& context)
+        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), std::move(context) }
+        , _onFulfill{ std::move(onFulfill) }
+      {}
+
+    public:
+      virtual void run() override {
+        std::call_once(Base::_called, [&]() {
+          try {
+            Fulfill<void>::get();
+          } catch (...) {
+            Base::runReject();
+            return;
+          }
+
+          try {
+            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+            _onFulfill(deferred);
+          } catch (...) {
+            // previous task is failed
+            Base::runReject();
+          }
+        });
+      }
+    };
   }
 }
 

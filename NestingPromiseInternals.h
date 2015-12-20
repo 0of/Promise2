@@ -24,7 +24,7 @@ namespace Promise2 {
       NestingPromiseNodeInternal(std::function<Promise<ReturnType>(ArgType)>& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   std::shared_ptr<ThreadContext>&& context)
-        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), std::move(context) }
+        : Base{ std::move(onReject), std::move(context) }
         , _onFulfill{ std::move(onFulfill) }
       {}
 
@@ -45,6 +45,47 @@ namespace Promise2 {
 
             // return a promise will hold the return value
             _onFulfill(preValue).then([&](ReturnType v){
+              deferred.setResult(v);
+            });
+
+          } catch (...) {
+            // previous task is failed
+            Base::runReject();
+          }
+      	});
+      }
+    };  
+
+    template<typename ReturnType>
+    class NestingPromiseNodeInternal<ReturnType, void> : public PromiseNodeInternalBase<ReturnType, void> {
+      using Base = PromiseNodeInternalBase<ReturnType, void>;
+
+    private:
+      std::function<Promise<ReturnType>()> _onFulfill;
+
+    public:
+      NestingPromiseNodeInternal(std::function<Promise<ReturnType>()>& onFulfill, 
+                  std::function<void(std::exception_ptr)>&& onReject,
+                  std::shared_ptr<ThreadContext>&& context)
+        : Base{ std::move(onReject), std::move(context) }
+        , _onFulfill{ std::move(onFulfill) }
+      {}
+
+    public:
+      virtual void run() override {
+       	std::call_once(Base::_called, [&]() {
+          try {
+            Fulfill<void>::get();
+          } catch (...) {
+            Base::runReject();
+            return;
+          }
+
+          try {
+            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+
+            // return a promise will hold the return value
+            _onFulfill().then([&](ReturnType v){
               deferred.setResult(v);
             });
 
