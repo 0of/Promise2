@@ -7,19 +7,53 @@ c++14 compliant cross-platform implementations of promise
 - similar to [Promise](https://github.com/0of/Promise)
 - no need to invoke the chain by method `Done()`
 
-# API References
-## Promise\<T\>
-- Promise(std::function<T(void)>&& task, const ThreadContext& context)
-> construct a promise with task and thread context(which thread is running at)
-
-- Promise(std::function\<void(PromiseDefer\<T\>&&)\>&& task, ThreadContext* &&context)
-> constructor with deferred task
-    
-- template\<typename NextT\> Promise\<NextT\> then(std::function\<NextT(T)\>&& onFulfill, std::function<void(std::exception_ptr)>&& onReject, const ThreadContext& context) 
-> chainify current promise to the next one
-
-## PromiseDefer\<T\>
-- template\<T\> void setResult(T&& )
-> fulfill the promise
-
 # Usage Guidelines
+## Create a new promise
+```c++
+using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
+
+auto promise = Promise<void>::New([]{
+  // do something in new thread
+}, new STLThreadContext);
+```
+
+## Create a deferred promise
+```c++
+// libdispatch
+using CurrentThreadContext = ThreadContextImpl::GCD::CurrentThreadContext;
+
+auto promise = Promise<int>::New([](PromiseDefer<int>&& defer){
+  // do something in current thread
+  doSomeAsync([deferred = std::move(defer)] (int code) mutable {
+    // when finshed
+    if (code < 0) {
+        // something terrible happens
+        try {
+            convertCodeToException(code);
+        } catch (...) {
+            deferred.setException(std::current_exception());
+            return;
+        }
+    }
+    
+    deferred.setResult(code);
+  })
+}, new STLThreadContext);
+```
+
+## Create a nesting promise
+```c++
+// Win32
+using ThreadPoolThreadContext = ThreadContextImpl::Windows::ThreadPoolContext; 
+
+// current promise will forward the result till the nesting one finished
+auto promise = Promise<int>::New([]() -> Promise<int> /* return a promise */ {
+  // do something in thread pool
+  return Promise<int>::New([]{
+    // do some caculations
+    return 1024;
+  }, new ThreadPoolThreadContext);
+  
+}, new ThreadPoolThreadContext);
+
+```
