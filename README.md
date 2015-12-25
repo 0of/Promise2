@@ -14,7 +14,7 @@ using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
 
 auto promise = Promise<void>::New([]{
   // do something in new thread
-}, new STLThreadContext);
+}, STLThreadContext::New());
 ```
 
 ## Create a deferred promise
@@ -38,7 +38,7 @@ auto promise = Promise<int>::New([](PromiseDefer<int>&& defer){
     
     deferred.setResult(code);
   })
-}, new STLThreadContext);
+}, CurrentThreadContext::New());
 ```
 
 ## Create a nesting promise
@@ -52,8 +52,76 @@ auto promise = Promise<int>::New([]() -> Promise<int> /* return a promise */ {
   return Promise<int>::New([]{
     // do some caculations
     return 1024;
-  }, new ThreadPoolThreadContext);
+  }, ThreadPoolThreadContext::New());
   
-}, new ThreadPoolThreadContext);
+}, ThreadPoolThreadContext::New());
 
+```
+
+## Append a thenable
+```c++
+using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
+
+auto promise = Promise<void>::New([]{
+  // do something in new thread
+}, STLThreadContext::New());
+
+promise.then([]{
+  // do something in new thread
+}, [](std::exception_ptr) {
+  // handle the exception
+}, STLThreadContext::New());
+```
+
+## Append a deferred thenable
+```c++
+// libdispatch
+using CurrentThreadContext = ThreadContextImpl::GCD::CurrentThreadContext;
+using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
+
+auto promise = Promise<void>::New([]{
+  // do something in new thread
+}, STLThreadContext::New());
+
+promise.then([](PromiseDefer<int>&& defer){
+  // do something in current thread
+  doSomeAsync([deferred = std::move(defer)] (int code) mutable {
+    // when finshed
+    if (code < 0) {
+        // something terrible happens
+        try {
+            convertCodeToException(code);
+        } catch (...) {
+            deferred.setException(std::current_exception());
+            return;
+        }
+    }
+    
+    deferred.setResult(code);
+  })
+}, STLThreadContext::New()).then([](int code){
+  std::cout << code;
+}, nullptr, CurrentThreadContext::New());
+```
+
+## Append a nesting thenable
+```c++
+using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
+// Win32
+using ThreadPoolThreadContext = ThreadContextImpl::Windows::ThreadPoolContext; 
+
+auto promise = Promise<void>::New([]{
+  // do something in new thread
+}, STLThreadContext::New());
+
+promise.then([]() -> Promise<int> /* return a promise */ {
+  // do something in thread pool
+  return Promise<int>::New([]{
+    // do some caculations
+    return 1024;
+  }, ThreadPoolThreadContext::New());
+  
+}, ThreadPoolThreadContext::New()).then([](int calResult){
+  std::cout << calResult;
+}, nullptr, STLThreadContext::New());
 ```
