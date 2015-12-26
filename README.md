@@ -125,3 +125,19 @@ promise.then([]() -> Promise<int> /* return a promise */ {
   std::cout << calResult;
 }, nullptr, STLThreadContext::New());
 ```
+
+# API Reference
+## ThreadContext
+`ThreadContext` represents the state of the running or pre-running thread and it has the ability to instruct the thread to schedule the task
+
+### Tips when you implement your own `ThreadContext`
+- **When promise is fulfilled or rejected, the associated `ThreadContext` will be destroyed automatically**
+- **Do NOT ignore the task and you should invoke it somewhere in your code once otherwise the promise chain will stop to propagate its state**
+
+### Default implemented `ThreadContext`
+- GCD thread context
+- Win32 thread context
+- STL thread context
+
+
+
