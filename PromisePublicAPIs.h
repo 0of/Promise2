@@ -179,6 +179,10 @@ namespace Promise2 {
       return !!_node;
     }
 
+  public:
+    bool isFulfilled() const; 
+    bool isRejected() const;
+
   private:
     Promise(const Promise<T>& ) = delete;
     Promise& operator = (const Promise<T>& ) = delete;
@@ -227,6 +231,9 @@ namespace Promise2 {
     bool isValid() const {
       return !!_node;
     }
+
+    bool isFulfilled() const;
+    bool isRejected() const;
 
   private:
     Promise(const SelfType& ) = delete;

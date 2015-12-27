@@ -38,6 +38,11 @@ namespace Promise2 {
     nextPromise._node = nextNode; \
     return nextPromise; }
 
+#define CALL_NODE_IMP(method) \
+    { if (!_node) { \
+        throw std::logic_error("invalid promise"); \
+      } \
+      return _node->method(); }
 
 	template<typename T>
 	Promise<T> PromiseSpawner<T>::New(std::function<T(void)>&& task, ThreadContext* &&context) 
@@ -83,6 +88,12 @@ namespace Promise2 {
                                ThreadContext* &&context)
     THEN_IMP(Details::NestingPromiseNodeInternal)
 #endif // NESTING_PROMISE
+
+    template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
+    template<typename T> bool Promise<T>::isRejected() const CALL_NODE_IMP(isRejected)
+
+    bool Promise<void>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
+    bool Promise<void>::isRejected() const CALL_NODE_IMP(isRejected)
 } // Promise2
 
 #endif // PROMISE_PUBLIC_AP_ISIMPL_H

@@ -30,6 +30,10 @@ namespace Promise2 {
 
     public:
       virtual void chainNext(const std::shared_ptr<Fulfill<T>>&, std::function<void()>&& notify) = 0;
+
+    public:
+    	virtual bool isFulfilled() const = 0;
+    	virtual bool isRejected() const = 0;
     };
 
     class PromiseValueBase {
@@ -75,6 +79,10 @@ namespace Promise2 {
     public:
       bool hasAssigned() const {
         return _hasAssigned;
+      }
+
+      bool isExceptionCase() const {
+      	return nullptr != _exception;
       }
 
     private:
@@ -300,6 +308,14 @@ namespace Promise2 {
       bool hasChained() const {
         return _hasChained;
       }
+
+      bool isFulfilled() const {
+      	return _promise->hasAssigned() && !_promise->isExceptionCase();
+      }
+
+      bool isRejected() const {
+      	return _promise->hasAssigned() && _promise->isExceptionCase();
+      }
     };
 
     template<typename ReturnType, typename ArgType>
@@ -339,6 +355,15 @@ namespace Promise2 {
 
         _forward->doChaining(fulfill, std::move(notify));
       }
+
+    public:
+    	virtual bool isFulfilled() const override {
+    		return _forward->isFulfilled();
+    	}
+
+    	virtual bool isRejected() const override {
+    		return _forward->isRejected();
+    	}
 
     protected:
       // called when exception has been thrown
