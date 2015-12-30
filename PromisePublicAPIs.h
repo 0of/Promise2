@@ -143,8 +143,13 @@ namespace Promise2 {
 
   	friend class PromiseSpawner<T>;
 
+  public:
+    template<typename ArgType>
+    static Promise<T> Resolved(ArgType&& arg);
+    static Promise<T> Rejected(std::exception_ptr e);
+
   private:
-    std::shared_ptr<Details::PromiseNode<T>> _node; 
+    std::shared_ptr<Details::PromiseNode<T>> _node;
 
   public:
     // empty constructor
@@ -195,6 +200,10 @@ namespace Promise2 {
 
   	using Thenable = PromiseThenable<void>;
   	using SelfType = Promise<void>;
+
+  public:
+    static SelfType Resolved();
+    static SelfType Rejected(std::exception_ptr e);
 
   private:
     std::shared_ptr<Details::PromiseNode<void>> _node; 

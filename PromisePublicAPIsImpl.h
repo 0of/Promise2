@@ -12,6 +12,8 @@
 #include "NestingPromiseInternals.h"
 #endif
 
+#include "ResolvedRejectedPromiseInternals.h"
+
 namespace Promise2 {
 
 /**
@@ -70,30 +72,65 @@ namespace Promise2 {
     THEN_IMP(Details::PromiseNodeInternal)
 
 #if DEFERRED_PROMISE
-  	template<typename T>
-    template<typename NextT, typename OnFulfill>
-    Promise<NextT> PromiseThenable<T>::ThenDeferred(SharedPromiseNode<T>& node,
-                               OnFulfill&& onFulfill, 
-                               std::function<void(std::exception_ptr)>&& onReject, 
-                               ThreadContext* &&context)
+	template<typename T>
+  template<typename NextT, typename OnFulfill>
+  Promise<NextT> PromiseThenable<T>::ThenDeferred(SharedPromiseNode<T>& node,
+                             OnFulfill&& onFulfill, 
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context)
    	THEN_IMP(Details::DeferredPromiseNodeInternal) 
 #endif // DEFERRED_PROMISE
 
 #if NESTING_PROMISE
-    template<typename T>
-    template<typename NextT, typename OnFulfill>
-    Promise<NextT> PromiseThenable<T>::ThenNesting(SharedPromiseNode<T>& node, 
-    	                         OnFulfill&& onFulfill,
-                               std::function<void(std::exception_ptr)>&& onReject, 
-                               ThreadContext* &&context)
+  template<typename T>
+  template<typename NextT, typename OnFulfill>
+  Promise<NextT> PromiseThenable<T>::ThenNesting(SharedPromiseNode<T>& node, 
+  	                         OnFulfill&& onFulfill,
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context)
     THEN_IMP(Details::NestingPromiseNodeInternal)
 #endif // NESTING_PROMISE
 
-    template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
-    template<typename T> bool Promise<T>::isRejected() const CALL_NODE_IMP(isRejected)
+  template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
+  template<typename T> bool Promise<T>::isRejected() const CALL_NODE_IMP(isRejected)
 
-    bool Promise<void>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
-    bool Promise<void>::isRejected() const CALL_NODE_IMP(isRejected)
+  bool Promise<void>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
+  bool Promise<void>::isRejected() const CALL_NODE_IMP(isRejected)
+
+  template<typename T>
+  template<typename ArgType>
+  Promise<T> Promise<T>::Resolved(ArgType&& arg) {
+    Promise<T> spawned;
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<T>>(std::forward<ArgType>(arg));
+    spawned._node = node;
+
+    return spawned;
+  }
+
+  template<typename T>
+  Promise<T> Promise<T>::Rejected(std::exception_ptr e) {
+    Promise<T> spawned;
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<T>>(e);
+    spawned._node = node;
+
+    return spawned;
+  }
+
+  Promise<void> Promise<void>::Resolved() {
+    Promise<void> spawned;
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<void>>();
+    spawned._node = node;
+
+    return spawned;
+  }
+
+  Promise<void> Promise<void>::Rejected(std::exception_ptr e) {
+    Promise<void> spawned;
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<void>>(e);
+    spawned._node = node;
+
+    return spawned;
+  }
 } // Promise2
 
 #endif // PROMISE_PUBLIC_AP_ISIMPL_H
