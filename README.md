@@ -126,6 +126,25 @@ promise.then([]() -> Promise<int> /* return a promise */ {
 }, nullptr, STLThreadContext::New());
 ```
 
+## Resolved & Rejected
+```c++
+using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
+
+Promise<int>::Resolved(5).then([](int five) {
+  std::cout << five;
+}, STLThreadContext::New());
+
+try {
+  throw std::logic_error("logic error?");
+} catch (...) {
+  Promise<int>::Rejected(std::current_exception()).then([](int) {
+    std::cout << "Never called!";
+  }, [](std::exception_ptr e) {
+    std::cout << "something's wrong?!";
+  }, STLThreadContext::New());
+}
+```
+
 # API Reference
 ## ThreadContext
 `ThreadContext` represents the state of the running or pre-running thread and it has the ability to instruct the thread to schedule the task
