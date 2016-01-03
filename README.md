@@ -158,5 +158,16 @@ try {
 - Win32 thread context
 - STL thread context
 
+## Promise\<T\>
+`Promise` provides a kind of mechanism to acquire the result which is type of the given `T` (voidness with `T == void`) or throw an exception later asynchronously. And each `Promise` should be bound to a `ThreadContext`, which means fulfill or reject the promise within specific context. `ThreadContext` will schedule either `fulfill` or `reject` both methods are passing to `Promise` to run asynchronously or synchronously under different situations.
+
+> I recommend you to get familiar with [`Javascript Promise`](https://www.promisejs.org) though two totally different implementations and usages.
+
+### Normal promise
+### Deferable promise
+### Nesting promise
+
+
+
 
 
