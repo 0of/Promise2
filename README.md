@@ -167,7 +167,8 @@ try {
 ### Deferable promise
 ### Nesting promise
 
-
+# License
+  MIT License
 
 
 
