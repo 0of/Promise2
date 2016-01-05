@@ -163,7 +163,9 @@ try {
 
 > I recommend you to get familiar with [`Javascript Promise`](https://www.promisejs.org) though two totally different implementations and usages.
 
-### Normal promise
+### Synchronous promise
+The promise is resolved by an instance of the given type `T` or rejected by an exception as soon as the `fulfill` or `reject` [callables](http://en.cppreference.com/w/cpp/concept/Callable) returned.
+
 ### Deferable promise
 ### Nesting promise
 
