@@ -167,6 +167,30 @@ try {
 The promise is resolved by an instance of the given type `T` or rejected by an exception as soon as the `fulfill` or `reject` [callables](http://en.cppreference.com/w/cpp/concept/Callable) returned.
 
 ### Deferable promise
+The resolved state of the promise is not determinate by the time the `fulfill` [callables](http://en.cppreference.com/w/cpp/concept/Callable) returns. And it allows you to warp any asynchronous scatter operations into highly dense and clearly expressed code blocks.
+```c++
+// wrapped class for shipping the PromiseDefer object
+class Context {
+public:
+  PromiseDefer<std::string> deferred;
+};
+
+// called when file read successfully
+void OnReadFile(const std::string& content, Context *context) {
+  context->deferred.setResult(content);
+  // clean the context
+  delete context;
+}
+
+Promise<std::string>::New([[](PromiseDefer<std::string>&& defer){
+  Context *context = new Context;
+  // move the defer object
+  context->deferred = std::move(defer);
+
+  ReadFile("package.json", OnReadFile, context /* passing the context */);
+}, someContext);
+```
+
 ### Nesting promise
 
 # License
