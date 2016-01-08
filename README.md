@@ -195,6 +195,10 @@ Promise<std::string>::New([[](PromiseDefer<std::string>&& defer){
 The nesting promise, returned from given `fulfill` callable, resolves or rejects the outter one.
 
 # TODOs
+- async test framework
+- test cases
+- promise extensions
+- copy/move assigment detection
 
 # License
   MIT License
