@@ -1,0 +1,8 @@
+tmp/
+.DS_Store
+CMakeFiles/
+deps/
+*.cmake
+CMakeCache.txt
+Makefile
+bin/
