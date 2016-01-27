@@ -20,20 +20,23 @@ namespace Promise2 {
  * Implementations
  */
 #define NEW_IMP(internal) \
-	 { Promise<T> spawned; \
-	 auto node = std::make_shared<internal<T, void>>(std::move(task), \
-	                std::function<void(std::exception_ptr)>(), std::move(context)); \
-	 context->scheduleToRun(&Details::PromiseNode<T>::run, node); \
-	 \
-	 spawned._node = node; \
-	 return spawned; }
+   { Promise<T> spawned; \
+   auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
+   auto node = std::make_shared<internal<T, void>>(std::move(task), \
+                  std::function<void(std::exception_ptr)>(), sharedContext); \
+   auto runnable = std::bind(&Details::PromiseNode<T>::run, node); \
+   sharedContext->scheduleToRun(std::move(runnable)); \
+   \
+   spawned._node = node; \
+   return spawned; }
 
-#define THEN_IMP(internal) \
-	{ auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-		\
-    auto nextNode = std::make_shared<internal<T, void>>(std::move(onFulfill), std::move(onReject), std::move(context)); \
-    node->chainNext(nextNode, [&]() { \
-      sharedContext->scheduleToRun(&Details::PromiseNode<T>::run, nextNode); \
+#define THEN_IMP(internal, T) \
+  { auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
+    \
+    auto nextNode = std::make_shared<internal<NextT, T>>(std::move(onFulfill), std::move(onReject), sharedContext); \
+    node->chainNext(nextNode, [=]() { \
+      auto runnable = std::bind(&Details::PromiseNode<NextT>::run, nextNode); \
+      sharedContext->scheduleToRun(std::move(runnable)); \
     }); \
     \
     Promise<NextT> nextPromise; \
@@ -46,49 +49,72 @@ namespace Promise2 {
       } \
       return _node->method(); }
 
-	template<typename T>
-	Promise<T> PromiseSpawner<T>::New(std::function<T(void)>&& task, ThreadContext* &&context) 
-		NEW_IMP(Details::PromiseNodeInternal)
+  template<typename T>
+  Promise<T> PromiseSpawner<T>::New(std::function<T(void)>&& task, ThreadContext* &&context) 
+    NEW_IMP(Details::PromiseNodeInternal)
 
 #if DEFERRED_PROMISE
-	template<typename T>
+  template<typename T>
   Promise<T> PromiseSpawner<T>::New(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context) 
-  	NEW_IMP(Details::DeferredPromiseNodeInternal)
-#endif // DEFERRED_PROMISE
-
-#if NESTING_PROMISE
-	template<typename T>
-  Promise<T> PromiseSpawner<T>::New(std::function<Promise<T>()>&& task, ThreadContext* &&context) 
-  	NEW_IMP(Details::NestingPromiseNodeInternal)
-#endif // NESTING_PROMISE
-
-
-	template<typename T>
-	template<typename NextT, typename OnFulfill>
-  Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-  										       OnFulfill&& onFulfill, 
-                             std::function<void(std::exception_ptr)>&& onReject, 
-                             ThreadContext* &&context) 
-    THEN_IMP(Details::PromiseNodeInternal)
-
-#if DEFERRED_PROMISE
-	template<typename T>
-  template<typename NextT, typename OnFulfill>
-  Promise<NextT> PromiseThenable<T>::ThenDeferred(SharedPromiseNode<T>& node,
-                             OnFulfill&& onFulfill, 
-                             std::function<void(std::exception_ptr)>&& onReject, 
-                             ThreadContext* &&context)
-   	THEN_IMP(Details::DeferredPromiseNodeInternal) 
+    NEW_IMP(Details::DeferredPromiseNodeInternal)
 #endif // DEFERRED_PROMISE
 
 #if NESTING_PROMISE
   template<typename T>
-  template<typename NextT, typename OnFulfill>
-  Promise<NextT> PromiseThenable<T>::ThenNesting(SharedPromiseNode<T>& node, 
-  	                         OnFulfill&& onFulfill,
+  Promise<T> PromiseSpawner<T>::New(std::function<Promise<T>()>&& task, ThreadContext* &&context) 
+    NEW_IMP(Details::NestingPromiseNodeInternal)
+#endif // NESTING_PROMISE
+
+
+  template<typename T>
+  template<typename NextT>
+  Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
+                             std::function<NextT(T)>&& onFulfill,
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context) 
+    THEN_IMP(Details::PromiseNodeInternal, T)
+
+  template<typename NextT>
+  Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node,
+                             std::function<NextT(void)>&& onFulfill,
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context) 
+    THEN_IMP(Details::PromiseNodeInternal, void)
+
+
+#if DEFERRED_PROMISE
+  template<typename T>
+  template<typename NextT>
+  Promise<NextT> PromiseThenable<T>::ThenDeferred(SharedPromiseNode<T>& node,
+                             std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
                              std::function<void(std::exception_ptr)>&& onReject, 
                              ThreadContext* &&context)
-    THEN_IMP(Details::NestingPromiseNodeInternal)
+    THEN_IMP(Details::DeferredPromiseNodeInternal, T)
+
+  template<typename NextT>
+  Promise<NextT> PromiseThenable<void>::ThenDeferred(SharedPromiseNode<void>& node,
+                             std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context)
+    THEN_IMP(Details::DeferredPromiseNodeInternal, void)
+  
+#endif // DEFERRED_PROMISE
+
+#if NESTING_PROMISE
+  template<typename T>
+  template<typename NextT>
+  Promise<NextT> PromiseThenable<T>::ThenNesting(SharedPromiseNode<T>& node, 
+                             std::function<Promise<NextT>(T)>&& onFulfill,
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context)
+    THEN_IMP(Details::NestingPromiseNodeInternal, T)
+
+  template<typename NextT>
+  Promise<NextT> PromiseThenable<void>::ThenNesting(SharedPromiseNode<void>& node, 
+                             std::function<Promise<NextT>(void)>&& onFulfill,
+                             std::function<void(std::exception_ptr)>&& onReject, 
+                             ThreadContext* &&context)
+    THEN_IMP(Details::NestingPromiseNodeInternal, void)
 #endif // NESTING_PROMISE
 
   template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)

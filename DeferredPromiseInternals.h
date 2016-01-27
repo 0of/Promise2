@@ -54,15 +54,15 @@ namespace Promise2 {
       std::function<void(PromiseDefer<ReturnType>&&, ArgType)> _onFulfill;
 
     public:
-      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&, ArgType)>& onFulfill, 
+      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&, ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
-                  std::shared_ptr<ThreadContext>&& context)
-        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), std::move(context) }
+                  const std::shared_ptr<ThreadContext>& context)
+        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), context }
         , _onFulfill{ std::move(onFulfill) }
       {}
 
     public:
-      virtual void run() override {
+      virtual void run() noexcept override {
         std::call_once(Base::_called, [&]() {
           ArgType preValue;
 
@@ -73,13 +73,9 @@ namespace Promise2 {
             return;
           }
 
-          try {
-            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
-            _onFulfill(deferred, preValue);
-          } catch (...) {
-            // previous task is failed
-            Base::runReject();
-          }
+          PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+          // no exception allowed
+          _onFulfill(std::move(deferred), preValue);
         });
       }
     };
@@ -92,15 +88,15 @@ namespace Promise2 {
       std::function<void(PromiseDefer<ReturnType>&&)> _onFulfill;
 
     public:
-      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&)>& onFulfill, 
+      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   std::shared_ptr<ThreadContext>&& context)
-        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), std::move(context) }
+        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), context }
         , _onFulfill{ std::move(onFulfill) }
       {}
 
     public:
-      virtual void run() override {
+      virtual void run() noexcept override {
         std::call_once(Base::_called, [&]() {
           try {
             Fulfill<void>::get();
@@ -109,13 +105,9 @@ namespace Promise2 {
             return;
           }
 
-          try {
-            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
-            _onFulfill(deferred);
-          } catch (...) {
-            // previous task is failed
-            Base::runReject();
-          }
+          PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+          // no exception allowed
+          _onFulfill(std::move(deferred));
         });
       }
     };

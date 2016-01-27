@@ -198,7 +198,7 @@ namespace Promise2 {
     public:
       virtual ~Fulfill() = default;
 
-    protected:
+    public:
       void attach(const SharedPromiseValue<FulfillArgType>& previousPromise) {
         if (_attachGuard.test_and_set()) {
           // already attached or is attaching
@@ -299,7 +299,7 @@ namespace Promise2 {
       }
 
       void reject(std::exception_ptr exception) {
-        _promise.setException(exception);
+        _promise->setException(exception);
         if (_notify) {
           _notify();
         }
@@ -321,12 +321,6 @@ namespace Promise2 {
     template<typename ReturnType, typename ArgType>
     class PromiseNodeInternal;
 
-    //
-    //  @alias
-    //
-    template<typename ReturnType, typename ArgType>
-    using EnableShared = std::enable_shared_from_this<PromiseNodeInternal<ReturnType, ArgType>>;
-
     template<typename ReturnType, typename ArgType>
     class PromiseNodeInternalBase : public PromiseNode<ReturnType>
                               	  , public Fulfill<ArgType> {
@@ -339,20 +333,16 @@ namespace Promise2 {
 
     public:
       PromiseNodeInternalBase(std::function<void(std::exception_ptr)>&& onReject,
-                  std::shared_ptr<ThreadContext>&& context)
+                  const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
         , Fulfill<ArgType>()
-        , _forward{ std::make_unique<DeferPromiseCore<ReturnType>::element_type>() }
+        , _forward{ std::make_unique<typename DeferPromiseCore<ReturnType>::element_type>() }
         , _onReject{ std::move(onReject) }
-        , _context{ std::move(context) }
+        , _context{ context }
       {}
 
     public:
       virtual void chainNext(const std::shared_ptr<Fulfill<ReturnType>>& fulfill, std::function<void()>&& notify) override {
-        if (fulfill == this) {
-          throw std::logic_error("invalid chaining state");
-        }
-
         _forward->doChaining(fulfill, std::move(notify));
       }
 
@@ -397,8 +387,8 @@ namespace Promise2 {
     public:
       PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
-                  std::shared_ptr<ThreadContext>&& context)
-        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), std::move(context) }
+                  const std::shared_ptr<ThreadContext>& context)
+        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), context }
         , _onFulfill{ std::move(onFulfill) }
       {}
 
@@ -447,8 +437,8 @@ namespace Promise2 {
     public:
       PromiseNodeInternal(std::function<ReturnType()>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
-                  std::shared_ptr<ThreadContext>&& context)
-        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), std::move(context) }
+                  const std::shared_ptr<ThreadContext>& context)
+        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), context }
         , _onFulfill{ std::move(onFulfill) }
       {}
 
