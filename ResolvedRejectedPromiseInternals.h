@@ -23,34 +23,29 @@ namespace Promise2 {
     public:
    		template<typename ValueType>
       explicit ResolvedRejectedPromiseInternals(ValueType&& v)
-        : _promiseValue{ std::make_shared<SharedPromiseValue<ReturnType>::element_type>() } {
+        : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
         // fulfilled the value
         ForwardFulfillPolicy<ReturnType>::wrappedFulfill(_promiseValue, std::forward<ValueType>(v));
       }
 
       // `void`
       ResolvedRejectedPromiseInternals()
-        : _promiseValue{ std::make_shared<SharedPromiseValue<ReturnType>::element_type>() } {
+        : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
         // fulfilled the value
         ForwardFulfillPolicy<ReturnType>::wrappedFulfill(_promiseValue);
       }
 
       // exception
       explicit ResolvedRejectedPromiseInternals(std::exception_ptr e)
-        : _promiseValue{ std::make_shared<SharedPromiseValue<ReturnType>::element_type>() } {
+        : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
         // rejected
         _promiseValue->setException(e);
       }
-
 
     public:
       virtual void run() override {}
 
       virtual void chainNext(const std::shared_ptr<Fulfill<ReturnType>>& fulfill, std::function<void()>&& notify) override {
-        if (fulfill == this) {
-          throw std::logic_error("invalid chaining state");
-        }
-
 				fulfill->attach(_promiseValue);
 
 				// promise value has been fulfilled or rejected

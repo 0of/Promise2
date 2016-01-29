@@ -23,8 +23,8 @@ namespace Promise2 {
     public:
       NestingPromiseNodeInternal(std::function<Promise<ReturnType>(ArgType)>& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
-                  std::shared_ptr<ThreadContext>&& context)
-        : Base{ std::move(onReject), std::move(context) }
+                  const std::shared_ptr<ThreadContext>& context)
+        : Base{ std::move(onReject), context }
         , _onFulfill{ std::move(onFulfill) }
       {}
 
@@ -67,7 +67,7 @@ namespace Promise2 {
       NestingPromiseNodeInternal(std::function<Promise<ReturnType>()>& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   std::shared_ptr<ThreadContext>&& context)
-        : Base{ std::move(onReject), std::move(context) }
+        : Base{ std::move(onReject), context }
         , _onFulfill{ std::move(onFulfill) }
       {}
 

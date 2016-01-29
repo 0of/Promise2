@@ -17,21 +17,21 @@
 #include "PromiseConfig.h"
 
 namespace Promise2 {
-	// declarations
-	namespace Details {
-		template<typename T> class PromiseNode;
-		template<typename T> class Forward;
+  // declarations
+  namespace Details {
+    template<typename T> class PromiseNode;
+    template<typename T> class Forward;
     template<typename T> using DeferPromiseCore = std::unique_ptr<Forward<T>>;
-	} // Details
+  } // Details
 
-	template<typename T> class Promise;
-	template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<T>>;
-	// !
+  template<typename T> class Promise;
+  template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<T>>;
+  // !
 
   //
   // @class ThreadContext
   //
-	class ThreadContext {
+  class ThreadContext {
   public:
     virtual ~ThreadContext() = default;
 
@@ -88,9 +88,9 @@ namespace Promise2 {
 
   template<typename T>
   class PromiseSpawner {
-	public:
-		// constructor with task and running context
-		static Promise<T> New(std::function<T(void)>&& task, ThreadContext* &&context);
+  public:
+    // constructor with task and running context
+    static Promise<T> New(std::function<T(void)>&& task, ThreadContext* &&context);
 
 #if DEFERRED_PROMISE
     // constructor with deferred task
@@ -106,42 +106,71 @@ namespace Promise2 {
   template<typename T>
   class PromiseThenable {
   public:
-  	template<typename NextT, typename OnFulfill>
+    template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node,
-    										       OnFulfill&& onFulfill, 
+                               std::function<NextT(T)>&& onFulfill, 
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
 
 #if DEFERRED_PROMISE
-    template<typename NextT, typename OnFulfill>
+    template<typename NextT>
     static Promise<NextT> ThenDeferred(SharedPromiseNode<T>& node,
-                               OnFulfill&& onFulfill, 
+                               std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
 #endif // DEFERRED_PROMISE
 
 #if NESTING_PROMISE
-    template<typename NextT, typename OnFulfill>
+    template<typename NextT>
     static Promise<NextT> ThenNesting(SharedPromiseNode<T>& node, 
-    	                         OnFulfill&& onFulfill,
+                               std::function<Promise<NextT>(T)>&& onFulfill,
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
 #endif // NESTING_PROMISE
   };
 
+  template<>
+  class PromiseThenable<void> {
+  public:
+    template<typename NextT>
+    static Promise<NextT> Then(SharedPromiseNode<void>& node,
+                               std::function<NextT(void)>&& onFulfill, 
+                               std::function<void(std::exception_ptr)>&& onReject, 
+                               ThreadContext* &&context);
+
+#if DEFERRED_PROMISE
+    template<typename NextT>
+    static Promise<NextT> ThenDeferred(SharedPromiseNode<void>& node,
+                               std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
+                               std::function<void(std::exception_ptr)>&& onReject, 
+                               ThreadContext* &&context);
+#endif // DEFERRED_PROMISE
+
+#if NESTING_PROMISE
+    template<typename NextT>
+    static Promise<NextT> ThenNesting(SharedPromiseNode<void>& node, 
+                               std::function<Promise<NextT>(void)>&& onFulfill,
+                               std::function<void(std::exception_ptr)>&& onReject, 
+                               ThreadContext* &&context);
+#endif // NESTING_PROMISE
+
+  };
+
 #define THEN_INLINE_IMP(type) \
-  	{ if (!isValid()) throw std::logic_error("invalid promise"); \
-			Thenable::Then##type(_node, std::move(onFulfill), std::move(onReject), std::move(context)); }
+    { if (!isValid()) throw std::logic_error("invalid promise"); \
+      return Thenable::Then##type(_node, std::move(onFulfill), std::move(onReject), std::move(context)); }
 
   //
   // @class Promise
   //
   template<typename T>
   class Promise : public PromiseSpawner<T> {
-  private:		
-  	using Thenable = PromiseThenable<T>;
+    template<typename Type> friend class PromiseThenable;
 
-  	friend class PromiseSpawner<T>;
+  private:    
+    using Thenable = PromiseThenable<T>;
+
+    friend class PromiseSpawner<T>;
 
   public:
     template<typename ArgType>
@@ -155,11 +184,11 @@ namespace Promise2 {
     // empty constructor
     Promise() = default;
 
-  	Promise(Promise<T>&& promise) = default;
+    Promise(Promise<T>&& promise) = default;
 
-  	Promise<T>& operator = (Promise<T>&& promise) = default;
+    Promise<T>& operator = (Promise<T>&& promise) = default;
 
-	public:
+  public:
     template<typename NextT>
     Promise<NextT> then(std::function<NextT(T)>&& onFulfill, 
                         std::function<void(std::exception_ptr)>&& onReject, 
@@ -195,11 +224,13 @@ namespace Promise2 {
 
   template<>
   class Promise<void> : public PromiseSpawner<void> {
-  private:
-  	friend class PromiseSpawner<void>;
+    template<typename Type> friend class PromiseThenable;
 
-  	using Thenable = PromiseThenable<void>;
-  	using SelfType = Promise<void>;
+  private:
+    friend class PromiseSpawner<void>;
+
+    using Thenable = PromiseThenable<void>;
+    using SelfType = Promise<void>;
 
   public:
     static SelfType Resolved();
@@ -212,13 +243,13 @@ namespace Promise2 {
     // empty constructor
     Promise() = default;
 
-  	Promise(SelfType&& promise) = default;
+    Promise(SelfType&& promise) = default;
 
-  	SelfType& operator = (SelfType&& promise) = default;
+    SelfType& operator = (SelfType&& promise) = default;
 
-	public:
+  public:
     template<typename NextT>
-    Promise<NextT> then(std::function<NextT()>&& onFulfill, 
+    Promise<NextT> then(std::function<NextT(void)>&& onFulfill, 
                         std::function<void(std::exception_ptr)>&& onReject, 
                         ThreadContext* &&context) THEN_INLINE_IMP()
 

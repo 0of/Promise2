@@ -17,35 +17,35 @@
 #include <dispatch/dispatch.h>
 
 namespace ThreadContextImpl {
-	namespace GCD {
-		using Task = std::function<void()>;
+  namespace GCD {
+    using Task = std::function<void()>;
 
-		static void InvokeFunction(void *context) {
-			std::unique_ptr<Task> function{ std::static_cast<Task *>(context) };
-			(*function)();
-		}
+    static void InvokeFunction(void *context) {
+      std::unique_ptr<Task> function{ std::static_cast<Task *>(context) };
+      (*function)();
+    }
 
-		ThreadContext *QueueBasedThreadContext::New(dispatch_queue_t queue) {
-			QueueBasedThreadContext *context = new QueueBasedThreadContext;
-			if (context) {
-				context->_queue = queue;
-			}
-			
-			return context;
-		}
+    ThreadContext *QueueBasedThreadContext::New(dispatch_queue_t queue) {
+      QueueBasedThreadContext *context = new QueueBasedThreadContext;
+      if (context) {
+        context->_queue = queue;
+      }
+      
+      return context;
+    }
 
-		void QueueBasedThreadContext::scheduleToRun(std::function<void()>&& task) {
-			dispatch_async_f(_queue, new Task{ std::move(task) }, InvokeFunction);
-		}
+    void QueueBasedThreadContext::scheduleToRun(std::function<void()>&& task) {
+      dispatch_async_f(_queue, new Task{ std::move(task) }, InvokeFunction);
+    }
 
-		ThreadContext *CurrentThreadContext::New() {
-			return QueueBasedThreadContext::New(dispatch_get_current_queue());
-		}
+    ThreadContext *CurrentThreadContext::New() {
+      return QueueBasedThreadContext::New(dispatch_get_current_queue());
+    }
 
-		ThreadContext *MainThreadContext::New() {
-			return QueueBasedThreadContext::New(dispatch_get_main_queue());
-		}
-	}
+    ThreadContext *MainThreadContext::New() {
+      return QueueBasedThreadContext::New(dispatch_get_main_queue());
+    }
+  }
 }
 
 

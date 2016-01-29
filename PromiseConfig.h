@@ -6,7 +6,7 @@
 #endif // DEFERRED_PROMISE
 
 #ifndef NESTING_PROMISE
-# define NESTING_PROMISE 1
+# define NESTING_PROMISE 0
 #endif // NESTING_PROMISE
 
 #endif // PROMISE_CONFIG_H
