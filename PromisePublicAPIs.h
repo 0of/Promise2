@@ -15,6 +15,7 @@
 #include <stdexcept>
  
 #include "PromiseConfig.h"
+#include "declfn.h"
 
 namespace Promise2 {
   // declarations
@@ -189,6 +190,17 @@ namespace Promise2 {
     Promise<T>& operator = (Promise<T>&& promise) = default;
 
   public:
+    template<typename OnFulfill>
+    auto then(OnFulfill&& onFulfill,
+                        std::function<void(std::exception_ptr)>&& onReject, 
+                        ThreadContext* &&context) {
+      auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
+
+      static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");
+      return then(std::move(onFulfillFn), std::move(onReject), std::move(context));
+    }
+
+  public:
     template<typename NextT>
     Promise<NextT> then(std::function<NextT(T)>&& onFulfill, 
                         std::function<void(std::exception_ptr)>&& onReject, 
@@ -248,6 +260,16 @@ namespace Promise2 {
     SelfType& operator = (SelfType&& promise) = default;
 
   public:
+    template<typename OnFulfill>
+    auto then(OnFulfill&& onFulfill,
+                        std::function<void(std::exception_ptr)>&& onReject, 
+                        ThreadContext* &&context) {
+      auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
+
+      static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");
+      return then(std::move(onFulfillFn), std::move(onReject), std::move(context));
+    }
+
     template<typename NextT>
     Promise<NextT> then(std::function<NextT(void)>&& onFulfill, 
                         std::function<void(std::exception_ptr)>&& onReject, 

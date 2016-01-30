@@ -325,7 +325,7 @@ namespace Promise2 {
     class PromiseNodeInternalBase : public PromiseNode<ReturnType>
                               	  , public Fulfill<ArgType> {
     protected:
-      DeferPromiseCore<ReturnType> _forward;
+      std::unique_ptr<Forward<ReturnType>> _forward;
       std::shared_ptr<ThreadContext> _context;
 
       std::function<void(std::exception_ptr)> _onReject;
@@ -336,7 +336,7 @@ namespace Promise2 {
                   const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
         , Fulfill<ArgType>()
-        , _forward{ std::make_unique<typename DeferPromiseCore<ReturnType>::element_type>() }
+        , _forward{ std::make_unique<Forward<ReturnType>>() }
         , _onReject{ std::move(onReject) }
         , _context{ context }
       {}
@@ -372,6 +372,40 @@ namespace Promise2 {
     private:
       PromiseNodeInternalBase(PromiseNodeInternalBase&& node) = delete;
       PromiseNodeInternalBase(const PromiseNodeInternalBase&) = delete;
+    };
+
+    template<typename ReturnType>
+    struct RunArgFulfillPolicy {
+      template<typename ForwardPointer, typename FulfillFn, typename ArgType>
+      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn, ArgType&& value) {
+        forward->fulfill(fulfillFn(std::forward<ArgType>(value)));
+      }
+    };
+
+    template<>
+    struct RunArgFulfillPolicy<void> {
+      template<typename ForwardPointer, typename FulfillFn, typename ArgType>
+      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn, ArgType&& value) {
+        fulfillFn(std::forward<ArgType>(value));
+        forward->fulfill();
+      }
+    };
+
+    template<typename ReturnType>
+    struct RunVoidFulfillPolicy {
+      template<typename ForwardPointer, typename FulfillFn>
+      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn) {
+        forward->fulfill(fulfillFn());
+      }
+    };
+
+    template<>
+    struct RunVoidFulfillPolicy<void> {
+      template<typename ForwardPointer, typename FulfillFn>
+      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn) {
+        fulfillFn();
+        forward->fulfill();
+      }
     };
 
     //
@@ -418,9 +452,7 @@ namespace Promise2 {
       void runFulfill(T&& preFulfilled) noexcept {
         // warpped the exception
         try {
-          Base::_forward->fulfill(
-            _onFulfill(std::forward<T>(preFulfilled))
-          );
+          RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, std::forward<T>(preFulfilled));
         } catch (...) {
           Base::runReject();
         }
@@ -465,9 +497,7 @@ namespace Promise2 {
       void runFulfill() noexcept {
         // warpped the exception
         try {
-          Base::_forward->fulfill(
-            _onFulfill()
-          );
+          RunVoidFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill);
         } catch (...) {
           Base::runReject();
         }
