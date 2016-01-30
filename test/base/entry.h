@@ -12,12 +12,17 @@
 #include "SpecInitializer.h"
 #include "TestSuite.h"
 
+using TestSpec = LTest::SequentialTestSpec;
+
+// template function
+#define SPEC_TFN(fn) fn<TestSpec>
+
 #define TEST_ENTRY(...) \
   int main() { \
     auto container = std::make_unique<LTest::SequentialTestRunnableContainer>(); \
-    auto spec = std::make_shared<LTest::SequentialTestSpec>(); \
+    auto spec = std::make_shared<TestSpec>(); \
     \
-    SpecInitializer<LTest::SequentialTestSpec> specInitializer{ *spec }; \
+    SpecInitializer<TestSpec> specInitializer{ *spec }; \
     specInitializer.appendCases(__VA_ARGS__); \
     \
     container->scheduleToRun(spec); \

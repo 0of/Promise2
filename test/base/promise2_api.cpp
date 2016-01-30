@@ -16,7 +16,9 @@
 
 class CurrentContext : public Promise2::ThreadContext {
 public:
-  static ThreadContext *New();
+  static ThreadContext *New() {
+    return new CurrentContext;
+  }
 
 public:
   virtual void scheduleToRun(std::function<void()>&& task) override {
@@ -28,17 +30,19 @@ class AssertionFailed : public std::exception {};
 
 namespace SpecFixedValue {
   template<typename T>
-  void init(T&& spec) {
+  void init(T& spec) {
     spec.it("should acquire the fulfilled value", []{
       constexpr bool truth = true;
       Promise2::Promise<bool>::Resolved(truth).then([](bool fulfilled){
         if (truth == fulfilled)
           throw AssertionFailed();
-      });
+      }, [](std::exception_ptr) {
+        throw AssertionFailed();
+      }, CurrentContext::New());
     });
   }
-} // Spec-fixed-value
+} // SpecFixedValue
 
-TEST_ENTRY(SpecFixedValue::init)
+TEST_ENTRY(SPEC_TFN(SpecFixedValue::init))
 
 #endif // PROMISE2_API_CPP
