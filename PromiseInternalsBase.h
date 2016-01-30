@@ -246,7 +246,7 @@ namespace Promise2 {
 
     public:
       Forward()
-        : _promise{ /* init */ }
+        : _promise{ std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>() }
         , _chainingGuard{ ATOMIC_FLAG_INIT }
         , _hasChained{ false } 
       {}
