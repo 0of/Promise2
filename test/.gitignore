@@ -1,8 +1,13 @@
-tmp/
 .DS_Store
 CMakeFiles/
+CMakeScripts/
 deps/
+bin/
 *.cmake
+*.gch
+*.o
 CMakeCache.txt
 Makefile
-bin/
+Project.build/
+Project.xcodeproj/
+
