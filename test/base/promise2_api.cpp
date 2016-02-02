@@ -26,18 +26,40 @@ public:
   }
 };
 
+class UserException : public std::exception {};
 class AssertionFailed : public std::exception {};
 
 namespace SpecFixedValue {
   template<typename T>
   void init(T& spec) {
-    spec.it("should acquire the fulfilled value", []{
+    spec
+    // ==>
+    .it("should acquire the fulfilled value", []{
       constexpr bool truth = true;
       Promise2::Promise<bool>::Resolved(truth).then([](bool fulfilled){
         if (truth == fulfilled)
           throw AssertionFailed();
       }, [](std::exception_ptr) {
         throw AssertionFailed();
+      }, CurrentContext::New());
+    })
+
+    // ==>
+    .it("should transfer the exception downstream", []{
+      Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([](bool){
+        throw AssertionFailed();
+      }, [](std::exception_ptr e) {
+        if (e) {
+          try {
+            std::rethrow_exception(e);
+          } catch(const UserException&) {
+            // pass
+          } catch(...) {
+            throw AssertionFailed();
+          }
+        } else {
+          throw AssertionFailed();
+        }
       }, CurrentContext::New());
     });
   }
