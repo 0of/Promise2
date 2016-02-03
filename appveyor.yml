@@ -1,0 +1,15 @@
+# C++ 11/14 support
+os: Visual Studio 2015
+
+# clone directory
+clone_folder: c:\projects\promise2
+
+before_build:
+  - cd c:\projects\promise2\test
+  - cmake -G "Visual Studio 14 2015 Win64"
+
+build:
+  project: promise_test.vcxproj
+
+test_script:
+  - ps: Get-ChildItem -Recurse -Filter *.exe | ForEach { Start-Process $_.Fullname }
