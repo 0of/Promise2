@@ -10,9 +10,9 @@ clone_folder: c:\projects\promise2
 before_build:
   - cd c:\projects\promise2\test
   - cmake -G "Visual Studio 14 2015 Win64"
+  - dir
 
 build:
-  - cmd: dir
   project: promise_test.sln
 
 test_script:
