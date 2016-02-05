@@ -8,8 +8,6 @@
 #include <exception>
 #include <type_traits>
 
-#include <dispatch/dispatch.h>
-
 namespace Promise2 {
   namespace Details {
     //
