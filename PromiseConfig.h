@@ -1,6 +1,10 @@
 #ifndef PROMISE_CONFIG_H
 #define PROMISE_CONFIG_H
 
+#ifndef USE_DISPATCH
+# define USE_DISPATCH 0
+#endif // USE_DISPATCH
+
 #ifndef DEFERRED_PROMISE
 # define DEFERRED_PROMISE 1
 #endif // DEFERRED_PROMISE

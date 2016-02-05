@@ -8,6 +8,10 @@
 #ifndef THREAD_CONTEXT_STL_H
 #define THREAD_CONTEXT_STL_H
 
+#include "PromiseConfig.h"
+
+#if USE_DISPATCH
+
 typedef struct dispatch_queue_s *dispatch_queue_t; 
 
 #include "PromisePublicAPIs"
@@ -45,6 +49,8 @@ namespace ThreadContextImpl {
       static ThreadContext *New();
     };
   } // GCD
-} 
+}
+
+#endif // USE_DISPATCH
 
 #endif // THREAD_CONTEXT_STL_H

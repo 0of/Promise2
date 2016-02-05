@@ -7,6 +7,7 @@
  */
 #include "ThreadContext_GCD.h"
 
+#if USE_DISPATCH
 /**
  * disable objc
  */
@@ -48,7 +49,7 @@ namespace ThreadContextImpl {
   }
 }
 
-
+#endif // USE_DISPATCH
 
 
 

@@ -1,6 +1,10 @@
 # C++ 11/14 support
 os: Visual Studio 2015
 
+platform: Any CPU
+
+configuration: Release
+
 # clone directory
 clone_folder: c:\projects\promise2
 
