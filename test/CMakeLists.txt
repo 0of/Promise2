@@ -4,6 +4,7 @@ project(promise_test)
 
 include(ExternalProject)
 find_package(Git REQUIRED)
+find_package(Threads REQUIRED)
 
 ExternalProject_Add(
     LTest
@@ -26,4 +27,4 @@ set(EXECUTABLE_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/base/*.cpp")
 add_executable(promise_test ${tests})
-
+target_link_libraries(promise_test ${CMAKE_THREAD_LIBS_INIT})
