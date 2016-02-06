@@ -1,4 +1,7 @@
 # Promise2
+[![Build Status](https://travis-ci.org/0of/Promise2.svg?branch=master)](https://travis-ci.org/0of/Promise2)
+[![Build status](https://ci.appveyor.com/api/projects/status/0ipwbe082lmsi4p5?svg=true)](https://ci.appveyor.com/project/0of/promise2-un46g)
+
 c++14 compliant cross-platform implementations of promise
 
 # Features
