@@ -1,15 +1,18 @@
 # C++ 11/14 support
 os: Visual Studio 2015
 
+configuration: Release
+
 # clone directory
 clone_folder: c:\projects\promise2
 
 before_build:
   - cd c:\projects\promise2\test
   - cmake -G "Visual Studio 14 2015 Win64"
+  - dir
 
 build:
-  project: promise_test.vcxproj
+  project: c:\projects\promise2\test\promise_test.sln
 
 test_script:
-  - ps: Get-ChildItem -Recurse -Filter *.exe | ForEach { Start-Process $_.Fullname }
+  - ps: Get-ChildItem -Path "c:\projects\promise2\test\bin" -Recurse -Filter *.exe | ForEach { Start-Process $_.Fullname }

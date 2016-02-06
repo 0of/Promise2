@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 
+project(promise_test)
+
 include(ExternalProject)
 find_package(Git REQUIRED)
 
