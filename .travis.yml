@@ -1,0 +1,31 @@
+language: cpp
+
+compiler:
+  - clang
+  - gcc
+
+addons:
+ apt:
+   sources:
+     - llvm-toolchain-precise
+     - ubuntu-toolchain-r-test
+   packages:
+     - g++-5
+     - clang-3.8
+     - cmake
+
+before_install:
+  # pwd ~> HOME/test
+  - cd ./test
+
+install:
+  - if [ "$CXX" = "g++" ]; then export CXX="g++-5" CC="gcc-5"; fi
+  - if [ "$CXX" = "clang++" ]; then export CXX="clang++-3.7" CC="clang-3.7"; fi
+  - $CXX --version
+  - cmake .
+  - make all
+
+script:
+  - sh ./run_test.sh
+
+
