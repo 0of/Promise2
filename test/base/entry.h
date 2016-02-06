@@ -9,8 +9,30 @@
 #ifndef ENTRY_H
 #define ENTRY_H
 
-#include "SpecInitializer.h"
 #include "TestSuite.h"
+
+template<typename Spec>
+class SpecInitializer {
+private:
+  std::add_lvalue_reference_t<Spec> _spec;
+
+public:
+  explicit SpecInitializer(std::add_lvalue_reference_t<Spec> spec)
+    : _spec{ spec }
+  {}
+
+public:
+  template<typename Functor>
+  void appendCases(Functor&& fn) {
+    fn(_spec);
+  }
+
+  template<typename Any, typename... Rest>
+  void appendCases(Any&& any, Rest&&... rest) {
+    appendCases(std::forward<Any>(any));
+    appendCases(std::forward<Rest>(rest)...);
+  }
+};
 
 using TestSpec = LTest::SequentialTestSpec;
 

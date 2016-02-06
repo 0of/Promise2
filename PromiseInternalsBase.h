@@ -335,8 +335,8 @@ namespace Promise2 {
         : PromiseNode<ReturnType>()
         , Fulfill<ArgType>()
         , _forward{ std::make_unique<Forward<ReturnType>>() }
-        , _onReject{ std::move(onReject) }
         , _context{ context }
+        , _onReject{ std::move(onReject) }
       {}
 
     public:
@@ -420,7 +420,7 @@ namespace Promise2 {
       PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
-        : PromiseNodeInternalBase<ReturnType, ArgType>{ std::move(onReject), context }
+        : Base(std::move(onReject), context)
         , _onFulfill{ std::move(onFulfill) }
       {}
 
@@ -468,7 +468,7 @@ namespace Promise2 {
       PromiseNodeInternal(std::function<ReturnType()>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
-        : PromiseNodeInternalBase<ReturnType, void>{ std::move(onReject), context }
+        : Base(std::move(onReject), context)
         , _onFulfill{ std::move(onFulfill) }
       {}
 
