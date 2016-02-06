@@ -36,7 +36,7 @@ namespace SpecFixedValue {
     // ==>
     .it("should acquire the fulfilled value", []{
       constexpr bool truth = true;
-      Promise2::Promise<bool>::Resolved(truth).then([](bool fulfilled){
+      Promise2::Promise<bool>::Resolved(truth).then([=](bool fulfilled){
         if (truth == fulfilled)
           throw AssertionFailed();
       }, [](std::exception_ptr) {

@@ -234,8 +234,8 @@ namespace Promise2 {
     Promise& operator = (const Promise<T>& ) = delete;
   };
 
-  template<>
-  class Promise<void> : public PromiseSpawner<void> {
+    template<>
+    class Promise<void> : public PromiseSpawner<void> {
     template<typename Type> friend class PromiseThenable;
 
   private:
@@ -262,8 +262,8 @@ namespace Promise2 {
   public:
     template<typename OnFulfill>
     auto then(OnFulfill&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) {
+              std::function<void(std::exception_ptr)>&& onReject, 
+              ThreadContext* &&context) {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
 
       static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");

@@ -15,4 +15,5 @@ build:
   project: c:\projects\promise2\test\promise_test.sln
 
 test_script:
-  - ps: Get-ChildItem -Path "c:\projects\promise2\test\bin" -Recurse -Filter *.exe | ForEach { Start-Process $_.Fullname }
+  - ps: Write-Host "running test cases..."
+  - ps: Get-ChildItem -Path "c:\projects\promise2\test\bin" -Recurse -Filter *.exe | ForEach { Write-Host $_.Fullname; Start-Process $_.Fullname }	
