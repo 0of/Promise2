@@ -53,7 +53,7 @@ namespace Promise2 {
   };
 
 #ifndef declfn
-# define declfn(fn) decltype(Promise2::callable_trait::INVOKE(fn, std::is_function<std::remove_pointer_t<decltype(fn)>>()))
+# define declfn(fn) decltype(Promise2::callable_trait::INVOKE(fn, std::is_function<std::remove_pointer_t<std::remove_reference_t<decltype(fn)>>>()))
 #endif // declfn
 } // Promise2
 

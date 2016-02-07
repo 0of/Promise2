@@ -198,14 +198,17 @@ namespace Promise2 {
     Promise<T>& operator = (Promise<T>&& promise) = default;
 
   public:
-    template<typename OnFulfill>
+    template<typename OnFulfill, typename OnReject>
     auto then(OnFulfill&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) {
-      auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
+              OnReject&& onReject, 
+              ThreadContext* &&context) {
+      static_assert(!std::is_same<declfn(onFulfill), std::false_type>::value &&
+                    !std::is_same<declfn(onReject), std::false_type>::value , "you need to provide a callable");
 
-      static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");
-      return std::move(then(std::move(onFulfillFn), std::move(onReject), std::move(context)));
+      auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
+      auto onRejectFn = declfn(onReject){ std::move(onReject) };
+
+      return std::move(then(std::move(onFulfillFn), std::move(onRejectFn), std::move(context)));
     }
 
   public:
@@ -268,14 +271,16 @@ namespace Promise2 {
     SelfType& operator = (SelfType&& promise) = default;
 
   public:
-    template<typename OnFulfill>
+    template<typename OnFulfill, typename OnReject>
     auto then(OnFulfill&& onFulfill,
-              std::function<void(std::exception_ptr)>&& onReject, 
+              OnReject&& onReject, 
               ThreadContext* &&context) {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
+      auto onOnRejectFn = declfn(onReject){ std::move(onReject) };
 
-      static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");
-      return std::move(then(std::move(onFulfillFn), std::move(onReject), std::move(context)));
+      static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value &&
+                    !std::is_same<decltype(onOnRejectFn), std::false_type>::value, "you need to provide a callable");
+      return std::move(then(std::move(onFulfillFn), std::move(onOnRejectFn), std::move(context)));
     }
 
     template<typename NextT>
