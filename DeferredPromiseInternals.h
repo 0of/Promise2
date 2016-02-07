@@ -46,9 +46,9 @@ namespace Promise2 {
 namespace Promise2 {
   namespace Details {
     // deferred PromiseNodeInternal
-    template<typename ReturnType, typename ArgType>
-    class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
-      using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
+    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
     private:
       std::function<void(PromiseDefer<ReturnType>&&, ArgType)> _onFulfill;
@@ -67,7 +67,7 @@ namespace Promise2 {
           ArgType preValue;
 
           try {
-            preValue = Fulfill<ArgType>::get();
+            preValue = Base::PreviousRetrievable::get();
           } catch (...) {
             Base::runReject();
             return;
@@ -80,9 +80,9 @@ namespace Promise2 {
       }
     };
 
-    template<typename ReturnType>
-    class DeferredPromiseNodeInternal<ReturnType, void> : public PromiseNodeInternalBase<ReturnType, void> {
-      using Base = PromiseNodeInternalBase<ReturnType, void>;
+    template<typename ReturnType, typename IsTask>
+    class DeferredPromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+      using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:
       std::function<void(PromiseDefer<ReturnType>&&)> _onFulfill;
@@ -99,7 +99,7 @@ namespace Promise2 {
       virtual void run() noexcept override {
         std::call_once(Base::_called, [&]() {
           try {
-            Fulfill<void>::get();
+            Base::PreviousRetrievable::get();
           } catch (...) {
             Base::runReject();
             return;

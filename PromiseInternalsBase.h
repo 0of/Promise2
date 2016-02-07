@@ -11,12 +11,15 @@
 namespace Promise2 {
   namespace Details {
     //
-    template<typename FulfillArgType>
+    template<typename FulfillArgType, typename IsTask>
     class Fulfill;
+      
+    template<typename FulfillArgType>
+    using SharedNonTaskFulfill = std::shared_ptr<Fulfill<FulfillArgType, std::false_type>>;
 
-  	//
-  	// each `Promise` will hold one shared `PromiseNode`
-  	//
+    //
+    // each `Promise` will hold one shared `PromiseNode`
+    //
     template<typename T>
     class PromiseNode {
     public:
@@ -27,11 +30,11 @@ namespace Promise2 {
       virtual void run() = 0;
 
     public:
-      virtual void chainNext(const std::shared_ptr<Fulfill<T>>&, std::function<void()>&& notify) = 0;
+      virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
 
     public:
-    	virtual bool isFulfilled() const = 0;
-    	virtual bool isRejected() const = 0;
+      virtual bool isFulfilled() const = 0;
+      virtual bool isRejected() const = 0;
     };
 
     class PromiseValueBase {
@@ -80,7 +83,7 @@ namespace Promise2 {
       }
 
       bool isExceptionCase() const {
-      	return nullptr != _exception;
+        return nullptr != _exception;
       }
 
     private:
@@ -138,7 +141,7 @@ namespace Promise2 {
     template<typename T> using SharedPromiseValue = std::shared_ptr<PromiseValue<T>>;
 
 
-    template<typename FulfillArgType>
+    template<typename FulfillArgType, typename IsTask>
     class FulfillGet {
     protected:
       SharedPromiseValue<FulfillArgType> _previousPromise;
@@ -157,10 +160,14 @@ namespace Promise2 {
         _previousPromise->accessGuard();
         return _previousPromise->value;
       }
+
+      void assign(const SharedPromiseValue<FulfillArgType>& v) {
+        _previousPromise = v;
+      }
     };
 
-    template<>
-    class FulfillGet<void> {
+    template<typename IsTask>
+    class FulfillGet<void, IsTask> {
     protected:
       SharedPromiseValue<void> _previousPromise;
 
@@ -177,19 +184,35 @@ namespace Promise2 {
 
         _previousPromise->accessGuard();
       }
+
+      void assign(const SharedPromiseValue<void>& v) {
+        _previousPromise = v;
+      }
+    };
+
+    template<>
+    class FulfillGet<void, std::true_type> {
+    public:
+      bool isAttached() const {
+        return true;
+      }
+
+    protected:
+      void get() {}
+      void assign(const SharedPromiseValue<void>&) {}
     };
 
     //
     // fulfill traits
     //
-    template<typename FulfillArgType>
-    class Fulfill : public FulfillGet<FulfillArgType> {
+    template<typename FulfillArgType, typename IsTask>
+    class Fulfill : public FulfillGet<FulfillArgType, IsTask> {
     private:
       std::atomic_flag _attachGuard;
 
     protected:
       Fulfill()
-        : FulfillGet<FulfillArgType>()
+        : FulfillGet<FulfillArgType, IsTask>()
         , _attachGuard{ ATOMIC_FLAG_INIT }
       {}
 
@@ -203,30 +226,30 @@ namespace Promise2 {
           throw std::logic_error("promise duplicated attachments");
         }
 
-        FulfillGet<FulfillArgType>::_previousPromise = previousPromise;
+        FulfillGet<FulfillArgType, IsTask>::assign(previousPromise);
       }
     };
 
     template<typename ForwardType>
     class ForwardFulfillPolicy {
     public:
-    	template<typename T>
-    	static void wrappedFulfill(SharedPromiseValue<ForwardType>& promise, T&& value) {
-    		promise->setValue(std::forward<T>(value));
-    	}
+      template<typename T>
+      static void wrappedFulfill(SharedPromiseValue<ForwardType>& promise, T&& value) {
+        promise->setValue(std::forward<T>(value));
+      }
 
-    	static void wrappedFulfill(SharedPromiseValue<void>& promise) {}
+      static void wrappedFulfill(SharedPromiseValue<void>& promise) {}
     };
 
     template<>
     class ForwardFulfillPolicy<void> {
     public:
-    	template<typename T>
-    	static void wrappedFulfill(SharedPromiseValue<void>& promise, T&& value) {}
+      template<typename T>
+      static void wrappedFulfill(SharedPromiseValue<void>& promise, T&& value) {}
 
-    	static void wrappedFulfill(SharedPromiseValue<void>& promise) {
-    		promise->setValue();
-    	}
+      static void wrappedFulfill(SharedPromiseValue<void>& promise) {
+        promise->setValue();
+      }
     };
 
     //
@@ -251,7 +274,7 @@ namespace Promise2 {
       ~Forward() = default;
 
     public:
-      void doChaining(const std::shared_ptr<Fulfill<ForwardType>>& fulfill, std::function<void()>&& notify) {
+      void doChaining(const SharedNonTaskFulfill<ForwardType>& fulfill, std::function<void()>&& notify) {
         if (_chainingGuard.test_and_set()) {
           // already chained or is chaining
           throw std::logic_error("promise duplicated chainings");
@@ -281,7 +304,7 @@ namespace Promise2 {
 
       template<typename T>
       void fulfill(T&& value) {
-				ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise, std::forward<T>(value));
+        ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise, std::forward<T>(value));
 
         if (_notify) {
           _notify();
@@ -308,20 +331,20 @@ namespace Promise2 {
       }
 
       bool isFulfilled() const {
-      	return _promise->hasAssigned() && !_promise->isExceptionCase();
+        return _promise->hasAssigned() && !_promise->isExceptionCase();
       }
 
       bool isRejected() const {
-      	return _promise->hasAssigned() && _promise->isExceptionCase();
+        return _promise->hasAssigned() && _promise->isExceptionCase();
       }
     };
 
-    template<typename ReturnType, typename ArgType>
-    class PromiseNodeInternal;
-
-    template<typename ReturnType, typename ArgType>
+    template<typename ReturnType, typename ArgType, typename IsTask>
     class PromiseNodeInternalBase : public PromiseNode<ReturnType>
-                              	  , public Fulfill<ArgType> {
+                                  , public Fulfill<ArgType, IsTask> {
+    protected:
+      using PreviousRetrievable = Fulfill<ArgType, IsTask>;
+
     protected:
       std::unique_ptr<Forward<ReturnType>> _forward;
       std::shared_ptr<ThreadContext> _context;
@@ -333,25 +356,25 @@ namespace Promise2 {
       PromiseNodeInternalBase(std::function<void(std::exception_ptr)>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
-        , Fulfill<ArgType>()
+        , PreviousRetrievable()
         , _forward{ std::make_unique<Forward<ReturnType>>() }
         , _context{ context }
         , _onReject{ std::move(onReject) }
       {}
 
     public:
-      virtual void chainNext(const std::shared_ptr<Fulfill<ReturnType>>& fulfill, std::function<void()>&& notify) override {
+      virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
         _forward->doChaining(fulfill, std::move(notify));
       }
 
     public:
-    	virtual bool isFulfilled() const override {
-    		return _forward->isFulfilled();
-    	}
+      virtual bool isFulfilled() const override {
+        return _forward->isFulfilled();
+      }
 
-    	virtual bool isRejected() const override {
-    		return _forward->isRejected();
-    	}
+      virtual bool isRejected() const override {
+        return _forward->isRejected();
+      }
 
     protected:
       // called when exception has been thrown
@@ -409,9 +432,9 @@ namespace Promise2 {
     //
     // Promise node
     //
-    template<typename ReturnType, typename ArgType>
-    class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType> {
-      using Base = PromiseNodeInternalBase<ReturnType, ArgType>;
+    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
     private:
       std::function<ReturnType(ArgType)> _onFulfill;
@@ -430,7 +453,7 @@ namespace Promise2 {
           ArgType preValue;
 
           try {
-            preValue = Fulfill<ArgType>::get();
+            preValue = Base::PreviousRetrievable::get();
           } catch (...) {
             Base::runReject();
             return;
@@ -457,9 +480,9 @@ namespace Promise2 {
       }
     }; 
 
-    template<typename ReturnType>
-    class PromiseNodeInternal<ReturnType, void> : public PromiseNodeInternalBase<ReturnType, void> {
-      using Base = PromiseNodeInternalBase<ReturnType, void>;
+    template<typename ReturnType, typename IsTask>
+    class PromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+      using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:
       std::function<ReturnType()> _onFulfill;
@@ -476,7 +499,7 @@ namespace Promise2 {
       virtual void run() override {
         std::call_once(Base::_called, [&]() {
           try {
-            Fulfill<void>::get();
+            Base::PreviousRetrievable::get();
           } catch (...) {
             Base::runReject();
             return;

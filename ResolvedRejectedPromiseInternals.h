@@ -45,7 +45,7 @@ namespace Promise2 {
     public:
       virtual void run() override {}
 
-      virtual void chainNext(const std::shared_ptr<Fulfill<ReturnType>>& fulfill, std::function<void()>&& notify) override {
+      virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
 				fulfill->attach(_promiseValue);
 
 				// promise value has been fulfilled or rejected
