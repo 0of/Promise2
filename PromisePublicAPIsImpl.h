@@ -22,7 +22,7 @@ namespace Promise2 {
 #define NEW_IMP(internal) \
    { Promise<T> spawned; \
    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-   auto node = std::make_shared<internal<T, void>>(std::move(task), \
+   auto node = std::make_shared<internal<T, void, std::true_type>>(std::move(task), \
                   std::function<void(std::exception_ptr)>(), sharedContext); \
    auto runnable = std::bind(&Details::PromiseNode<T>::run, node); \
    sharedContext->scheduleToRun(std::move(runnable)); \

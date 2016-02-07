@@ -30,6 +30,20 @@ class UserException : public std::exception {};
 class AssertionFailed : public std::exception {};
 
 namespace SpecFixedValue {
+  void passUserException(std::exception_ptr e) {
+    if (e) {
+      try {
+        std::rethrow_exception(e);
+      } catch(const UserException&) {
+        // pass
+      } catch(...) {
+        throw AssertionFailed();
+      }
+    } else {
+      throw AssertionFailed();
+    }
+  }
+
   template<typename T>
   void init(T& spec) {
     spec
@@ -37,7 +51,7 @@ namespace SpecFixedValue {
     .it("should acquire the fulfilled value", []{
       constexpr bool truth = true;
       Promise2::Promise<bool>::Resolved(truth).then([=](bool fulfilled){
-        if (truth == fulfilled)
+        if (truth != fulfilled)
           throw AssertionFailed();
       }, [](std::exception_ptr) {
         throw AssertionFailed();
@@ -48,20 +62,28 @@ namespace SpecFixedValue {
     .it("should transfer the exception downstream", []{
       Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([](bool){
         throw AssertionFailed();
-      }, [](std::exception_ptr e) {
-        if (e) {
-          try {
-            std::rethrow_exception(e);
-          } catch(const UserException&) {
-            // pass
-          } catch(...) {
+      }, passUserException, CurrentContext::New());
+    })
+
+    // ==>
+    .it("should acquire the fulfilled value from returned task", []{
+      constexpr bool truth = true;
+      Promise2::Promise<bool>::New([=]{ return truth; }, CurrentContext::New()).then([=](bool fulfilled){
+        if (truth != fulfilled)
             throw AssertionFailed();
-          }
-        } else {
+      }, [](std::exception_ptr) {
           throw AssertionFailed();
-        }
       }, CurrentContext::New());
+    })
+      
+    // ==>
+    .it("should transfer the exception downstream from returned task", []{
+      Promise2::Promise<bool>::New([]() -> bool { throw UserException(); }, CurrentContext::New()).then([](bool){
+        throw AssertionFailed();
+      }, passUserException, CurrentContext::New());
     });
+    
+  // end of the init spec
   }
 } // SpecFixedValue
 

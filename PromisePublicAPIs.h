@@ -90,6 +90,14 @@ namespace Promise2 {
   template<typename T>
   class PromiseSpawner {
   public:
+    template<typename Task>
+    static Promise<T> New(Task&& task, ThreadContext* &&context) {
+      auto taskFn = declfn(task){ std::move(task) };
+
+      static_assert(!std::is_same<decltype(taskFn), std::false_type>::value, "you need to provide a callable");
+      return std::move(New(std::move(taskFn), std::move(context)));
+    }
+
     // constructor with task and running context
     static Promise<T> New(std::function<T(void)>&& task, ThreadContext* &&context);
 
@@ -197,7 +205,7 @@ namespace Promise2 {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
 
       static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");
-      return then(std::move(onFulfillFn), std::move(onReject), std::move(context));
+      return std::move(then(std::move(onFulfillFn), std::move(onReject), std::move(context)));
     }
 
   public:
@@ -234,8 +242,8 @@ namespace Promise2 {
     Promise& operator = (const Promise<T>& ) = delete;
   };
 
-    template<>
-    class Promise<void> : public PromiseSpawner<void> {
+  template<>
+  class Promise<void> : public PromiseSpawner<void> {
     template<typename Type> friend class PromiseThenable;
 
   private:
@@ -267,7 +275,7 @@ namespace Promise2 {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
 
       static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value, "you need to provide a callable");
-      return then(std::move(onFulfillFn), std::move(onReject), std::move(context));
+      return std::move(then(std::move(onFulfillFn), std::move(onReject), std::move(context)));
     }
 
     template<typename NextT>
