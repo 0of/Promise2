@@ -95,21 +95,23 @@ namespace Promise2 {
       auto taskFn = declfn(task){ std::move(task) };
 
       static_assert(!std::is_same<decltype(taskFn), std::false_type>::value, "you need to provide a callable");
-      return std::move(New(std::move(taskFn), std::move(context)));
+      static_assert(!std::is_same<decltype(Spawn(std::move(taskFn), std::move(context))), std::false_type>::value, "match nothing...");
+
+      return std::move(Spawn(std::move(taskFn), std::move(context)));
     }
 
+  private:
     // constructor with task and running context
-    static Promise<T> New(std::function<T(void)>&& task, ThreadContext* &&context);
+    static Promise<T> Spawn(std::function<T(void)>&& task, ThreadContext* &&context);
 
-#if DEFERRED_PROMISE
     // constructor with deferred task
-    static Promise<T> New(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context);
-#endif // DEFERRED_PROMISE
+    static Promise<T> Spawn(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context);
 
-#if NESTING_PROMISE
     // constructor with nesting promise task
-    static Promise<T> New(std::function<Promise<T>()>&& task, ThreadContext* &&context);
-#endif // NESTING_PROMISE
+    static Promise<T> Spawn(std::function<Promise<T>()>&& task, ThreadContext* &&context);
+
+    // matching nothing
+    template<typename NonMatching> static auto Spawn(NonMatching&&, ThreadContext* &&) -> std::false_type;
   };
 
   template<typename T>
@@ -121,21 +123,20 @@ namespace Promise2 {
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
 
-#if DEFERRED_PROMISE
     template<typename NextT>
-    static Promise<NextT> ThenDeferred(SharedPromiseNode<T>& node,
+    static Promise<NextT> Then(SharedPromiseNode<T>& node,
                                std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
-#endif // DEFERRED_PROMISE
 
-#if NESTING_PROMISE
     template<typename NextT>
-    static Promise<NextT> ThenNesting(SharedPromiseNode<T>& node, 
+    static Promise<NextT> Then(SharedPromiseNode<T>& node, 
                                std::function<Promise<NextT>(T)>&& onFulfill,
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
-#endif // NESTING_PROMISE
+
+    // matching nothing
+    template<typename NonMatching> static auto Then(...) -> std::false_type;
   };
 
   template<>
@@ -147,27 +148,21 @@ namespace Promise2 {
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
 
-#if DEFERRED_PROMISE
     template<typename NextT>
-    static Promise<NextT> ThenDeferred(SharedPromiseNode<void>& node,
+    static Promise<NextT> Then(SharedPromiseNode<void>& node,
                                std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
-#endif // DEFERRED_PROMISE
 
-#if NESTING_PROMISE
     template<typename NextT>
-    static Promise<NextT> ThenNesting(SharedPromiseNode<void>& node, 
+    static Promise<NextT> Then(SharedPromiseNode<void>& node, 
                                std::function<Promise<NextT>(void)>&& onFulfill,
                                std::function<void(std::exception_ptr)>&& onReject, 
                                ThreadContext* &&context);
-#endif // NESTING_PROMISE
 
+    // matching nothing
+    template<typename NonMatching> static auto Then(...) -> std::false_type;
   };
-
-#define THEN_INLINE_IMP(type) \
-    { if (!isValid()) throw std::logic_error("invalid promise"); \
-      return Thenable::Then##type(_node, std::move(onFulfill), std::move(onReject), std::move(context)); }
 
   //
   // @class Promise
@@ -208,28 +203,11 @@ namespace Promise2 {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
       auto onRejectFn = declfn(onReject){ std::move(onReject) };
 
-      return std::move(then(std::move(onFulfillFn), std::move(onRejectFn), std::move(context)));
+      static_assert(!std::is_same<decltype(Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context))), std::false_type>::value, "match nothing...");
+
+      if (!isValid()) throw std::logic_error("invalid promise");
+      return Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context));
     }
-
-  public:
-    template<typename NextT>
-    Promise<NextT> then(std::function<NextT(T)>&& onFulfill, 
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) THEN_INLINE_IMP()
-
-#if DEFERRED_PROMISE
-    template<typename NextT>
-    Promise<NextT> then(std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) THEN_INLINE_IMP(Deferred)
-#endif // DEFERRED_PROMISE
-
-#if NESTING_PROMISE
-    template<typename NextT>
-    Promise<NextT> then(std::function<Promise<NextT>(T)>&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) THEN_INLINE_IMP(Nesting)
-#endif // NESTING_PROMISE
     
   public:
     bool isValid() const {
@@ -276,32 +254,17 @@ namespace Promise2 {
               OnReject&& onReject, 
               ThreadContext* &&context) {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
-      auto onOnRejectFn = declfn(onReject){ std::move(onReject) };
+      auto onRejectFn = declfn(onReject){ std::move(onReject) };
 
       static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value &&
-                    !std::is_same<decltype(onOnRejectFn), std::false_type>::value, "you need to provide a callable");
-      return std::move(then(std::move(onFulfillFn), std::move(onOnRejectFn), std::move(context)));
+                    !std::is_same<decltype(onRejectFn), std::false_type>::value, "you need to provide a callable");
+
+      static_assert(!std::is_same<decltype(Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context))), std::false_type>::value, "match nothing...");
+
+      if (!isValid()) throw std::logic_error("invalid promise");
+      return Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context));
     }
 
-    template<typename NextT>
-    Promise<NextT> then(std::function<NextT(void)>&& onFulfill, 
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) THEN_INLINE_IMP()
-
-#if DEFERRED_PROMISE
-    template<typename NextT>
-    Promise<NextT> then(std::function<void(PromiseDefer<NextT>&&)>&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) THEN_INLINE_IMP(Deferred)
-#endif // DEFERRED_PROMISE
-
-#if NESTING_PROMISE
-    template<typename NextT>
-    Promise<NextT> then(std::function<Promise<NextT>()>&& onFulfill,
-                        std::function<void(std::exception_ptr)>&& onReject, 
-                        ThreadContext* &&context) THEN_INLINE_IMP(Nesting)
-#endif // NESTING_PROMISE
-    
   public:
     bool isValid() const {
       return !!_node;

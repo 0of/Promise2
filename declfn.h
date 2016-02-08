@@ -49,6 +49,9 @@ namespace Promise2 {
     template<typename Callable>
     static auto INVOKE(Callable&& callable, std::false_type isFunction) -> Traits::function_trait_t<decltype(&std::decay_t<Callable>::operator())>;
     
+    template<typename Return, typename... Args>
+    static auto INVOKE(const std::function<Return(Args...)>& fn, std::false_type isFunction) -> std::function<Return(Args...)>;
+
     static auto INVOKE(...) -> std::false_type;
   };
 

@@ -13,7 +13,7 @@
 namespace Promise2 {
 	namespace Details {
 		// nesting promise PromiseNodeInternal
-    template<typename ReturnType, typename ArgType>
+        template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
     class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
@@ -56,9 +56,9 @@ namespace Promise2 {
       }
     };  
 
-    template<typename ReturnType, typename IsTask = std::false_type>
-    class NestingPromiseNodeInternal<ReturnType, void> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
-      using Base = PromiseNodeInternalBase<ReturnType, void>;
+    template<typename ReturnType, typename IsTask>
+    class NestingPromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+      using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:
       std::function<Promise<ReturnType>()> _onFulfill;
@@ -75,7 +75,7 @@ namespace Promise2 {
       virtual void run() override {
        	std::call_once(Base::_called, [&]() {
           try {
-            ase::PreviousRetrievable::get();
+            Base::PreviousRetrievable::get();
           } catch (...) {
             Base::runReject();
             return;
