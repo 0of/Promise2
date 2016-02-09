@@ -31,6 +31,8 @@ namespace Promise2 {
 
     public:
       virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
+      // proxy fowarding
+      virtual void chainNext(const DeferPromiseCore<T>&) = 0;
 
     public:
       virtual bool isFulfilled() const = 0;
@@ -75,6 +77,11 @@ namespace Promise2 {
         if (_exception) {
           std::rethrow_exception(_exception);
         }
+      }
+
+    public:
+      std::exception_ptr fetchException() const {
+        return _exception;
       }
 
     public:
@@ -252,6 +259,16 @@ namespace Promise2 {
       }
     };
 
+    template<typename ForwardType>
+    struct ProxyForwardPolicy {
+      static void forwarding(const DeferPromiseCore<ForwardType>& core, const SharedPromiseValue<ForwardType>& promise);
+    };
+
+    template<>
+    struct ProxyForwardPolicy<void> {
+      static void forwarding(const DeferPromiseCore<void>& core, const SharedPromiseValue<void>& promise);
+    };
+
     //
     // forward traits
     //
@@ -302,6 +319,32 @@ namespace Promise2 {
         }
       }
 
+      void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
+        if (_chainingGuard.test_and_set()) {
+          // already chained or is chaining
+          throw std::logic_error("promise duplicated chainings");
+        }
+
+        auto valuePromise = _promise;
+        _notify = [=]{
+          if (!valuePromise->hasAssigned())
+            throw std::logic_error("invalid promise state");
+
+          if (valuePromise->isExceptionCase()) {
+            nextForward->reject(valuePromise->fetchException());
+          } else {
+            ProxyForwardPolicy<ForwardType>::forwarding(nextForward, valuePromise);
+          }
+        };
+
+        _hasChained = true;
+
+        // if already finished notify the next node now
+        if (_promise->hasAssigned()) {
+          _notify();
+        }
+      }
+
       template<typename T>
       void fulfill(T&& value) {
         ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise, std::forward<T>(value));
@@ -338,6 +381,16 @@ namespace Promise2 {
         return _promise->hasAssigned() && _promise->isExceptionCase();
       }
     };
+      
+
+    template<typename ForwardType>
+    void ProxyForwardPolicy<ForwardType>::forwarding(const DeferPromiseCore<ForwardType>& core, const SharedPromiseValue<ForwardType>& promise) {
+      core->fulfill(promise->value);
+    }
+
+    void ProxyForwardPolicy<void>::forwarding(const DeferPromiseCore<void>& core, const SharedPromiseValue<void>& promise) {
+      core->fulfill();
+    };
 
     template<typename ReturnType, typename ArgType, typename IsTask>
     class PromiseNodeInternalBase : public PromiseNode<ReturnType>
@@ -346,7 +399,7 @@ namespace Promise2 {
       using PreviousRetrievable = Fulfill<ArgType, IsTask>;
 
     protected:
-      std::unique_ptr<Forward<ReturnType>> _forward;
+      DeferPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
 
       std::function<void(std::exception_ptr)> _onReject;
@@ -365,6 +418,10 @@ namespace Promise2 {
     public:
       virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
         _forward->doChaining(fulfill, std::move(notify));
+      }
+
+      virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
+        _forward->doChaining(nextForward);
       }
 
     public:
