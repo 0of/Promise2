@@ -15,8 +15,8 @@ namespace Promise2 {
   // @class PromiseDefer
   //
   template<typename T>
-  PromiseDefer<T>::PromiseDefer(Details::DeferPromiseCore<T>&& core)
-    : _core{ std::move(core) }
+  PromiseDefer<T>::PromiseDefer(Details::DeferPromiseCore<T>& core)
+    : _core{ core }
   {}
 
   template<typename T>
@@ -30,8 +30,8 @@ namespace Promise2 {
     _core->reject(e);
   }
 
-  PromiseDefer<void>::PromiseDefer(Details::DeferPromiseCore<void>&& core)
-    : _core{ std::move(core) }
+  PromiseDefer<void>::PromiseDefer(Details::DeferPromiseCore<void>& core)
+    : _core{ core }
   {}
 
 	void PromiseDefer<void>::setResult() {
@@ -73,7 +73,7 @@ namespace Promise2 {
             return;
           }
 
-          PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+          PromiseDefer<ReturnType> deferred{ Base::_forward };
           // no exception allowed
           _onFulfill(std::move(deferred), preValue);
         });
@@ -105,7 +105,7 @@ namespace Promise2 {
             return;
           }
 
-          PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
+          PromiseDefer<ReturnType> deferred{ Base::_forward };
           // no exception allowed
           _onFulfill(std::move(deferred));
         });

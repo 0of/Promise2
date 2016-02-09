@@ -13,7 +13,7 @@
 namespace Promise2 {
 	namespace Details {
 		// nesting promise PromiseNodeInternal
-        template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
     class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
@@ -21,7 +21,7 @@ namespace Promise2 {
       std::function<Promise<ReturnType>(ArgType)> _onFulfill;
 
     public:
-      NestingPromiseNodeInternal(std::function<Promise<ReturnType>(ArgType)>& onFulfill, 
+      NestingPromiseNodeInternal(std::function<Promise<ReturnType>(ArgType)>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
@@ -41,13 +41,7 @@ namespace Promise2 {
           }
 
           try {
-            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
-
-            // return a promise will hold the return value
-            _onFulfill(preValue).then([&](ReturnType v){
-              deferred.setResult(v);
-            });
-
+            _onFulfill(preValue).internal()->chainNext(Base::_forward);
           } catch (...) {
             // previous task is failed
             Base::runReject();
@@ -64,9 +58,9 @@ namespace Promise2 {
       std::function<Promise<ReturnType>()> _onFulfill;
 
     public:
-      NestingPromiseNodeInternal(std::function<Promise<ReturnType>()>& onFulfill, 
+      NestingPromiseNodeInternal(std::function<Promise<ReturnType>()>&& onFulfill, 
                   std::function<void(std::exception_ptr)>&& onReject,
-                  std::shared_ptr<ThreadContext>&& context)
+                  const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
         , _onFulfill{ std::move(onFulfill) }
       {}
@@ -82,13 +76,7 @@ namespace Promise2 {
           }
 
           try {
-            PromiseDefer<ReturnType> deferred{ std::move(Base::_forward) };
-
-            // return a promise will hold the return value
-            _onFulfill().then([&](ReturnType v){
-              deferred.setResult(v);
-            });
-
+             _onFulfill().internal()->chainNext(Base::_forward);
           } catch (...) {
             // previous task is failed
             Base::runReject();

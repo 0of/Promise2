@@ -11,17 +11,17 @@
 #include "PromiseInternalsBase.h"
 
 namespace Promise2 {
-	namespace Details {
-		//
-		// Resolved/Rejected promise internals
-		//
+  namespace Details {
+    //
+    // Resolved/Rejected promise internals
+    //
     template<typename ReturnType>
     class ResolvedRejectedPromiseInternals : public PromiseNode<ReturnType> {
     private:
-    	SharedPromiseValue<ReturnType> _promiseValue;
+      SharedPromiseValue<ReturnType> _promiseValue;
 
     public:
-   		template<typename ValueType>
+      template<typename ValueType>
       explicit ResolvedRejectedPromiseInternals(ValueType&& v)
         : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
         // fulfilled the value
@@ -46,22 +46,26 @@ namespace Promise2 {
       virtual void run() override {}
 
       virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
-				fulfill->attach(_promiseValue);
+        fulfill->attach(_promiseValue);
 
-				// promise value has been fulfilled or rejected
-				notify();        
+        // promise value has been fulfilled or rejected
+        notify();        
+      }
+
+      virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
+        // TODO:
       }
 
     public:
       virtual bool isFulfilled() const override {
-      	return _promiseValue->hasAssigned() && !_promiseValue->isExceptionCase();
+        return _promiseValue->hasAssigned() && !_promiseValue->isExceptionCase();
       }
 
       virtual bool isRejected() const override {
-      	return _promiseValue->hasAssigned() && _promiseValue->isExceptionCase();
+        return _promiseValue->hasAssigned() && _promiseValue->isExceptionCase();
       }
     }; 
-	} // Details
+  } // Details
 }
  
 #endif // RESOLVED_REJECTED_PROMISE_INTERNALS_H

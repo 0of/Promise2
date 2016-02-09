@@ -8,6 +8,7 @@
 #ifndef PROMISE2_API_CPP
 #define PROMISE2_API_CPP
 
+#define NESTING_PROMISE 1
 /*
  * testing APIs
  */
@@ -81,8 +82,18 @@ namespace SpecFixedValue {
       Promise2::Promise<bool>::New([]() -> bool { throw UserException(); }, CurrentContext::New()).then([](bool){
         throw AssertionFailed();
       }, passUserException, CurrentContext::New());
-    });
+    })
     
+    // ==>
+    .it("should acquire the fulfilled value from nesting promise", []{
+      constexpr bool truth = true;
+      Promise2::Promise<bool>::New([=]{ return Promise2::Promise<bool>::Resolved(truth); }, CurrentContext::New()).then([=](bool fulfilled){
+        if (truth != fulfilled)
+            throw AssertionFailed();
+      }, [](std::exception_ptr) {
+          throw AssertionFailed();
+      }, CurrentContext::New());
+    });
   // end of the init spec
   }
 } // SpecFixedValue

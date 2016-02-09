@@ -22,7 +22,7 @@ namespace Promise2 {
   namespace Details {
     template<typename T> class PromiseNode;
     template<typename T> class Forward;
-    template<typename T> using DeferPromiseCore = std::unique_ptr<Forward<T>>;
+    template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<T>>;
   } // Details
 
   template<typename T> class Promise;
@@ -40,7 +40,6 @@ namespace Promise2 {
     virtual void scheduleToRun(std::function<void()>&& task) = 0;
   };
 
-#if DEFERRED_PROMISE
   //
   // @class PromiseDefer
   //
@@ -50,7 +49,7 @@ namespace Promise2 {
     Details::DeferPromiseCore<T> _core;
 
   public:
-    PromiseDefer(Details::DeferPromiseCore<T>&& core);
+    PromiseDefer(Details::DeferPromiseCore<T>& core);
 
     PromiseDefer(PromiseDefer<T>&&) = default;
     ~PromiseDefer() = default;
@@ -71,7 +70,7 @@ namespace Promise2 {
     Details::DeferPromiseCore<void> _core;
 
   public:
-    PromiseDefer(Details::DeferPromiseCore<void>&& core);
+    PromiseDefer(Details::DeferPromiseCore<void>& core);
 
     PromiseDefer(PromiseDefer<void>&&) = default;
     ~PromiseDefer() = default;
@@ -85,7 +84,6 @@ namespace Promise2 {
     PromiseDefer(const PromiseDefer<void>&) = delete;
     PromiseDefer<void>& operator = (const PromiseDefer<void>&) = delete;
   };
-#endif // DEFERRED_PROMISE
 
   template<typename T>
   class PromiseSpawner {
@@ -182,7 +180,7 @@ namespace Promise2 {
     static Promise<T> Rejected(std::exception_ptr e);
 
   private:
-    std::shared_ptr<Details::PromiseNode<T>> _node;
+    SharedPromiseNode<T> _node;
 
   public:
     // empty constructor
@@ -218,6 +216,9 @@ namespace Promise2 {
     bool isFulfilled() const; 
     bool isRejected() const;
 
+  public:
+    inline SharedPromiseNode<T> internal() const { return _node; }
+
   private:
     Promise(const Promise<T>& ) = delete;
     Promise& operator = (const Promise<T>& ) = delete;
@@ -238,7 +239,7 @@ namespace Promise2 {
     static SelfType Rejected(std::exception_ptr e);
 
   private:
-    std::shared_ptr<Details::PromiseNode<void>> _node; 
+    SharedPromiseNode<void> _node; 
 
   public:
     // empty constructor
@@ -272,6 +273,9 @@ namespace Promise2 {
 
     bool isFulfilled() const;
     bool isRejected() const;
+
+  public:
+    inline SharedPromiseNode<void> internal() const { return _node; }
 
   private:
     Promise(const SelfType& ) = delete;
