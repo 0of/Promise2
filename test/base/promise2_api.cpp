@@ -115,7 +115,7 @@ namespace SpecFixedValue {
     })
 
     // ==>
-    .it("should transfer the exception downstream from nesting promise", []{
+    .it("should transfer the exception downstream from deferred promise", []{
       Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred){ deferred.setException(std::make_exception_ptr(UserException())); }, CurrentContext::New()).then([=](bool fulfilled){
        throw AssertionFailed();
       }, passUserException, CurrentContext::New());
