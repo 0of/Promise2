@@ -9,6 +9,7 @@
 #define PROMISE2_API_CPP
 
 #define NESTING_PROMISE 1
+#define DEFERRED_PROMISE 1
 /*
  * testing APIs
  */
@@ -93,6 +94,31 @@ namespace SpecFixedValue {
       }, [](std::exception_ptr) {
           throw AssertionFailed();
       }, CurrentContext::New());
+    })
+
+    // ==>
+    .it("should transfer the exception downstream from nesting promise", []{
+      Promise2::Promise<bool>::New([]{ return Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())); }, CurrentContext::New()).then([=](bool fulfilled){
+       throw AssertionFailed();
+      }, passUserException, CurrentContext::New());
+    })
+
+    // ==>
+    .it("should acquire the fulfilled value from deferred promise", []{
+      constexpr bool truth = true;
+      Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred){ deferred.setResult(truth); }, CurrentContext::New()).then([=](bool fulfilled){
+        if (truth != fulfilled)
+            throw AssertionFailed();
+      }, [](std::exception_ptr) {
+          throw AssertionFailed();
+      }, CurrentContext::New());
+    })
+
+    // ==>
+    .it("should transfer the exception downstream from nesting promise", []{
+      Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred){ deferred.setException(std::make_exception_ptr(UserException())); }, CurrentContext::New()).then([=](bool fulfilled){
+       throw AssertionFailed();
+      }, passUserException, CurrentContext::New());
     });
   // end of the init spec
   }
