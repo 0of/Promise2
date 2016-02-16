@@ -9,29 +9,44 @@
 #define THREAD_CONTEXT_WINDOWS_H
 
 #if defined(_WIN32) || defined(_WIN64)
+#include <Windows.h>
+
 #include "PromisePublicAPIs"
 
 namespace ThreadContextImpl {
-	namespace Windows {
-		class ThreadPoolContext : public ThreadContext {
-		public:
-			static ThreadContext *New();
+  namespace Windows {
+    namespace Details {
+      using Task = std::function<void()>;
 
-		protected:
-			ThreadPoolContext() = default;
+      static void InvokeFunction(void *context) {
+        std::unique_ptr<Task> function{ std::static_cast<Task *>(context) };
+        (*function)();
+      }
+    } // Details
 
-		public:
-			virtual ~ThreadPoolContext() = default;
+    class ThreadPoolContext : public ThreadContext {
+    public:
+      static ThreadContext *New() {
+        return new ThreadPoolContext;
+      }
 
-		public:
-			virtual void scheduleToRun(std::function<void()>&& task) override;
+    protected:
+      ThreadPoolContext() = default;
 
-		private:
-			ThreadPoolContext(const ThreadPoolContext& ) = delete;
-			ThreadPoolContext& operator = (const ThreadPoolContext& ) = delete;
-		};
-	} // Windows
-}	
+    public:
+      virtual ~ThreadPoolContext() = default;
+
+    public:
+      virtual void scheduleToRun(std::function<void()>&& task) override {
+        ::QueueUserWorkItem(Details::InvokeFunction, new Details::Task{ std::move(task) }, 0);
+      }
+
+    private:
+      ThreadPoolContext(const ThreadPoolContext& ) = delete;
+      ThreadPoolContext& operator = (const ThreadPoolContext& ) = delete;
+    };
+  } // Windows
+} 
 
 #endif // windows
 

@@ -52,6 +52,9 @@ namespace Promise2 {
     template<typename Return, typename... Args>
     static auto INVOKE(const std::function<Return(Args...)>& fn, std::false_type isFunction) -> std::function<Return(Args...)>;
 
+    template<typename BindExpr>
+    static std::enable_if_t<std::is_bind_expression<BindExpr>::value, BindExpr> INVOKE(const BindExpr& bindExpr, std::false_type isFunction);
+
     static auto INVOKE(...) -> std::false_type;
   };
 

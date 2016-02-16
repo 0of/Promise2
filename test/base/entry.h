@@ -50,6 +50,8 @@ using TestSpec = LTest::SequentialTestSpec;
     container->scheduleToRun(spec); \
     container->start(); \
     \
+    std::this_thread::sleep_for(5s); \
+    \
     return 0; \
   }
   
