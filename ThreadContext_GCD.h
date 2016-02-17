@@ -12,15 +12,33 @@
 
 #if USE_DISPATCH
 
-typedef struct dispatch_queue_s *dispatch_queue_t; 
+#include <dispatch/dispatch.h>
 
 #include "PromisePublicAPIs"
 
+typedef struct dispatch_queue_s *dispatch_queue_t; 
+
 namespace ThreadContextImpl {
   namespace GCD {
+    namespace Details {
+      using Task = std::function<void()>;
+
+      static void InvokeFunction(void *context) {
+        std::unique_ptr<Task> function{ std::static_cast<Task *>(context) };
+        (*function)();
+      }
+    }
+
     class QueueBasedThreadContext : public ThreadContext {
     public:
-      static ThreadContext *New(dispatch_queue_t queue);
+      static ThreadContext *New(dispatch_queue_t queue) {
+        QueueBasedThreadContext *context = new QueueBasedThreadContext;
+        if (context) {
+          context->_queue = queue;
+        }
+        
+        return context;
+      }
 
     private:
       dispatch_queue_t _queue;
@@ -32,7 +50,9 @@ namespace ThreadContextImpl {
       virtual ~QueueBasedThreadContext() = default;
 
     public:
-      virtual void scheduleToRun(std::function<void()>&& task) override;
+      virtual void scheduleToRun(std::function<void()>&& task) override {
+        dispatch_async_f(_queue, new Details::Task{ std::move(task) }, Details::InvokeFunction);
+      }
 
     private:
       QueueBasedThreadContext(const QueueBasedThreadContext& ) = delete;
@@ -41,12 +61,16 @@ namespace ThreadContextImpl {
 
     class CurrentThreadContext : public ThreadContext {
     public:
-      static ThreadContext *New();
+      static ThreadContext *New() {
+        return QueueBasedThreadContext::New(dispatch_get_current_queue());
+      }
     };
 
     class MainThreadContext : public ThreadContext {
     public:
-      static ThreadContext *New();
+      static ThreadContext *New() {
+        return QueueBasedThreadContext::New(dispatch_get_main_queue());
+      }
     };
   } // GCD
 }

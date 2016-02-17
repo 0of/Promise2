@@ -49,11 +49,15 @@ namespace Promise2 {
         fulfill->attach(_promiseValue);
 
         // promise value has been fulfilled or rejected
-        notify();        
+        notify();
       }
 
       virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
-        // TODO:
+        if (_promiseValue->isExceptionCase()) {
+          nextForward->reject(_promiseValue->fetchException());
+        } else {
+          ProxyForwardPolicy<ReturnType>::forwarding(nextForward, _promiseValue);
+        }
       }
 
     public:
