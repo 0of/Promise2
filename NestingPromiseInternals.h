@@ -31,21 +31,15 @@ namespace Promise2 {
     public:
       virtual void run() override {
        	std::call_once(Base::_called, [&]() {
-          ArgType preValue;
+          Promise<ReturnType> wrapped;
 
           try {
-            preValue = Base::PreviousRetrievable::get();
+            wrapped = std::move(_onFulfill(std::forward<ReturnType>(Base::PreviousRetrievable::get())));
           } catch (...) {
-            Base::runReject();
-            return;
+            wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));
           }
 
-          try {
-            _onFulfill(preValue).internal()->chainNext(Base::_forward);
-          } catch (...) {
-            // previous task is failed
-            Base::runReject();
-          }
+          wrapped.internal()->chainNext(Base::_forward);
       	});
       }
     };  
@@ -68,19 +62,16 @@ namespace Promise2 {
     public:
       virtual void run() override {
        	std::call_once(Base::_called, [&]() {
-          try {
-            Base::PreviousRetrievable::get();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
+          Promise<ReturnType> wrapped;
 
           try {
-             _onFulfill().internal()->chainNext(Base::_forward);
+            Base::PreviousRetrievable::get();
+            wrapped = std::move(_onFulfill());
           } catch (...) {
-            // previous task is failed
-            Base::runReject();
+            wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));
           }
+
+          wrapped.internal()->chainNext(Base::_forward);
       	});
       }
     };  

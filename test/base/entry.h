@@ -35,13 +35,14 @@ public:
 };
 
 using TestSpec = LTest::SequentialTestSpec;
+using DefaultContainer = LTest::SequentialTestRunnableContainer;
 
 // template function
 #define SPEC_TFN(fn) fn<TestSpec>
 
-#define TEST_ENTRY(...) \
+#define TEST_ENTRY(ContainerType, ...) \
   int main() { \
-    auto container = std::make_unique<LTest::SequentialTestRunnableContainer>(); \
+    auto container = std::make_unique<ContainerType>(); \
     auto spec = std::make_shared<TestSpec>(); \
     \
     SpecInitializer<TestSpec> specInitializer{ *spec }; \
