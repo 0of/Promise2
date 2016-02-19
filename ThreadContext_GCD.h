@@ -5,8 +5,8 @@
  * Licensed under the MIT license.
  * https://github.com/0of/Promise2/blob/master/LICENSE
  */
-#ifndef THREAD_CONTEXT_STL_H
-#define THREAD_CONTEXT_STL_H
+#ifndef THREAD_CONTEXT_GCD_H
+#define THREAD_CONTEXT_GCD_H
 
 #include "PromiseConfig.h"
 
@@ -14,7 +14,7 @@
 
 #include <dispatch/dispatch.h>
 
-#include "PromisePublicAPIs"
+#include "PromisePublicAPIs.h"
 
 typedef struct dispatch_queue_s *dispatch_queue_t; 
 
@@ -24,12 +24,12 @@ namespace ThreadContextImpl {
       using Task = std::function<void()>;
 
       static void InvokeFunction(void *context) {
-        std::unique_ptr<Task> function{ std::static_cast<Task *>(context) };
+        std::unique_ptr<Task> function{ static_cast<Task *>(context) };
         (*function)();
       }
     }
 
-    class QueueBasedThreadContext : public ThreadContext {
+    class QueueBasedThreadContext : public Promise2::ThreadContext {
     public:
       static ThreadContext *New(dispatch_queue_t queue) {
         QueueBasedThreadContext *context = new QueueBasedThreadContext;
@@ -59,14 +59,14 @@ namespace ThreadContextImpl {
       QueueBasedThreadContext& operator = (const QueueBasedThreadContext& ) = delete;
     };
 
-    class CurrentThreadContext : public ThreadContext {
+    class CurrentThreadContext : public Promise2::ThreadContext {
     public:
       static ThreadContext *New() {
         return QueueBasedThreadContext::New(dispatch_get_current_queue());
       }
     };
 
-    class MainThreadContext : public ThreadContext {
+    class MainThreadContext : public Promise2::ThreadContext {
     public:
       static ThreadContext *New() {
         return QueueBasedThreadContext::New(dispatch_get_main_queue());
@@ -77,4 +77,4 @@ namespace ThreadContextImpl {
 
 #endif // USE_DISPATCH
 
-#endif // THREAD_CONTEXT_STL_H
+#endif // THREAD_CONTEXT_GCD_H

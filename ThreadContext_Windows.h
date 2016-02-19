@@ -11,7 +11,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
 
-#include "PromisePublicAPIs"
+#include "PromisePublicAPIs.h"
 
 namespace ThreadContextImpl {
   namespace Windows {
@@ -19,12 +19,12 @@ namespace ThreadContextImpl {
       using Task = std::function<void()>;
 
       static void InvokeFunction(void *context) {
-        std::unique_ptr<Task> function{ std::static_cast<Task *>(context) };
+        std::unique_ptr<Task> function{ static_cast<Task *>(context) };
         (*function)();
       }
     } // Details
 
-    class ThreadPoolContext : public ThreadContext {
+    class ThreadPoolContext : public Promise2::ThreadContext {
     public:
       static ThreadContext *New() {
         return new ThreadPoolContext;

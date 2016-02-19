@@ -10,6 +10,9 @@
 
 #define NESTING_PROMISE 1
 #define DEFERRED_PROMISE 1
+#ifdef __APPLE__
+# define USE_DISPATCH 1
+#endif // __APPLE__
 /*
  * testing APIs
  */
@@ -28,6 +31,54 @@ public:
     task(); 
   }
 };
+
+#ifdef __APPLE__
+#include <cstdlib>
+#include <dispatch/dispatch.h>
+
+class GCDContainer : public DefaultContainer {
+private:
+  std::atomic_int _runningTestCount;
+
+private:
+  using Runnable = std::pair<GCDContainer *, LTest::SharedTestRunnable>;
+
+  static void InvokeRunnable(void *context) {
+    std::unique_ptr<Runnable> runnable{ static_cast<Runnable *>(context) };
+    runnable->second->run(*runnable->first);
+  }
+
+  static void quit(void *) {
+    std::exit(0);
+  }
+
+public:
+  virtual void scheduleToRun(const LTest::SharedTestRunnable& runnable) override {
+    dispatch_async_f(dispatch_get_main_queue(), new Runnable{ this, runnable }, InvokeRunnable);
+    ++_runningTestCount;
+  }
+
+  virtual void endRun() override {
+    DefaultContainer::endRun();
+
+    if (--_runningTestCount == 0) {
+        dispatch_async_f(dispatch_get_main_queue(), nullptr, quit);
+    }
+  }
+
+protected:
+  virtual void startTheLoop() override {
+    dispatch_main();
+  }
+};
+# define CONTAINER_TYPE GCDContainer
+
+#include "ThreadContext_GCD.h"
+using MainThreadContext = ThreadContextImpl::GCD::MainThreadContext;
+
+#else
+# define CONTAINER_TYPE DefaultContainer
+#endif // __APPLE__
 
 class UserException : public std::exception {};
 class AssertionFailed : public std::exception {};
@@ -146,10 +197,13 @@ namespace SpecFixedValue {
   void init(T& spec) {
     INIT(CurrentContext, CurrentContext:)
     INIT(STLThreadContext, STLThreadContext:)
+#ifdef __APPLE__
+    INIT(MainThreadContext, GCDThreadContext:)
+#endif // __APPLE__
   // end of the init spec
   }
 } // SpecFixedValue
 
-TEST_ENTRY(SPEC_TFN(SpecFixedValue::init))
+TEST_ENTRY(CONTAINER_TYPE, SPEC_TFN(SpecFixedValue::init))
 
 #endif // PROMISE2_API_CPP
