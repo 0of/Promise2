@@ -171,6 +171,7 @@ namespace Promise2 {
 
   private:    
     using Thenable = PromiseThenable<T>;
+    using SelfType = Promise<T>;
 
     friend class PromiseSpawner<T>;
 
@@ -186,9 +187,13 @@ namespace Promise2 {
     // empty constructor
     Promise() = default;
 
-    Promise(Promise<T>&& promise) = default;
+    // copy constructor
+    Promise(const SelfType& ) = default;
+    // move constructor
+    Promise(SelfType&& ) = default;
 
-    Promise<T>& operator = (Promise<T>&& promise) = default;
+    SelfType& operator = (const SelfType& ) = default;
+    SelfType& operator = (SelfType&& ) = default;
 
   public:
     template<typename OnFulfill, typename OnReject>
@@ -218,10 +223,6 @@ namespace Promise2 {
 
   public:
     inline SharedPromiseNode<T> internal() const { return _node; }
-
-  private:
-    Promise(const Promise<T>& ) = delete;
-    Promise& operator = (const Promise<T>& ) = delete;
   };
 
   template<>
@@ -245,9 +246,13 @@ namespace Promise2 {
     // empty constructor
     Promise() = default;
 
+    // copy constructor
+    Promise(const SelfType& ) = default;
+    // move constructor
     Promise(SelfType&& promise) = default;
 
-    SelfType& operator = (SelfType&& promise) = default;
+    SelfType& operator = (const SelfType& ) = default;
+    SelfType& operator = (SelfType&& ) = default;
 
   public:
     template<typename OnFulfill, typename OnReject>
@@ -276,10 +281,6 @@ namespace Promise2 {
 
   public:
     inline SharedPromiseNode<void> internal() const { return _node; }
-
-  private:
-    Promise(const SelfType& ) = delete;
-    Promise& operator = (const SelfType& ) = delete;
   };
 }
  
