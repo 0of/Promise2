@@ -200,6 +200,20 @@ namespace SpecFixedValue {
 #ifdef __APPLE__
     INIT(MainThreadContext, GCDThreadContext:)
 #endif // __APPLE__
+
+    spec
+    /* ==> */
+    .it("should be fulfilled", []{
+      auto p = Promise2::Promise<int>::Resolved(1);
+      if (!p.isFulfilled())
+        throw AssertionFailed();
+    })
+    /* ==> */
+    .it("should be fulfilled", []{
+      auto p = Promise2::Promise<int>::Rejected(std::make_exception_ptr(UserException()));
+      if (!p.isRejected())
+        throw AssertionFailed();
+    });
   // end of the init spec
   }
 } // SpecFixedValue
