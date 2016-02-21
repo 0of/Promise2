@@ -30,7 +30,7 @@ namespace Promise2 {
 
     public:
       virtual void run() override {
-       	std::call_once(Base::_called, [&]() {
+       	std::call_once(Base::_called, [this]() {
           Promise<ReturnType> wrapped;
 
           try {
@@ -61,11 +61,11 @@ namespace Promise2 {
 
     public:
       virtual void run() override {
-       	std::call_once(Base::_called, [&]() {
+       	std::call_once(Base::_called, [this]() {
           Promise<ReturnType> wrapped;
 
           try {
-            Base::PreviousRetrievable::get();
+            Base::get();
             wrapped = std::move(_onFulfill());
           } catch (...) {
             wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));

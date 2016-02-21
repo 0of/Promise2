@@ -506,11 +506,11 @@ namespace Promise2 {
 
     public:
       virtual void run() override {
-        std::call_once(Base::_called, [&]() {
+        std::call_once(Base::_called, [this]() {
           ArgType preValue;
 
           try {
-            preValue = Base::PreviousRetrievable::get();
+            preValue = Base::get();
           } catch (...) {
             Base::runReject();
             return;
@@ -554,9 +554,9 @@ namespace Promise2 {
 
     public:
       virtual void run() override {
-        std::call_once(Base::_called, [&]() {
+        std::call_once(Base::_called, [this]() {
           try {
-            Base::PreviousRetrievable::get();
+            Base::get();
           } catch (...) {
             Base::runReject();
             return;
