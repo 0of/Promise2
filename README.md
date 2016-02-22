@@ -5,10 +5,9 @@
 c++14 compliant cross-platform implementations of promise
 
 # Features
-- written with `future<T>` & `promise<F>`
-- platform customized message deliver
-- similar to [Promise](https://github.com/0of/Promise)
-- no need to invoke the chain by method `Done()`
+- simple API definitions and quite easy to use
+- great extensibility and platform customized message deliver delegate
+- lightweight
 
 # Usage Guidelines
 ## Create a new promise
@@ -198,10 +197,8 @@ Promise<std::string>::New([[](PromiseDefer<std::string>&& defer){
 The nesting promise, returned from given `fulfill` callable, resolves or rejects the outter one.
 
 # TODOs
-- async test framework
 - test cases
 - promise extensions
-- copy/move assigment detection
 
 # License
   MIT License
