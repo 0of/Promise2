@@ -36,6 +36,11 @@ public:
 #include <cstdlib>
 #include <dispatch/dispatch.h>
 
+class Voidness : public LTest::TestRunable {
+public:
+  virtual void run(LTest::TestRunnableContainer& container) noexcept override {}
+};
+
 class GCDContainer : public DefaultContainer {
 private:
   std::atomic_int _runningTestCount;
@@ -50,6 +55,13 @@ private:
 
   static void quit(void *) {
     std::exit(0);
+  }
+
+public:
+  GCDContainer()
+    : _runningTestCount{ 0 } {
+    // DefaultContainer's got something to run with so that it can invoke the `startTheLoop` within `start`
+    DefaultContainer::scheduleToRun(std::make_shared<Voidness>());
   }
 
 public:
@@ -209,10 +221,35 @@ namespace SpecFixedValue {
         throw AssertionFailed();
     })
     /* ==> */
-    .it("should be fulfilled", []{
+    .it("should be rejected", []{
       auto p = Promise2::Promise<int>::Rejected(std::make_exception_ptr(UserException()));
       if (!p.isRejected())
         throw AssertionFailed();
+    })
+    /* ==> */
+    .it("should be fulfilled when the task returned", [](const LTest::SharedCaseEndNotifier& notifier){
+      constexpr bool truth = true;
+      auto p = Promise2::Promise<bool>::New([=]{ return truth; }, CurrentContext::New());
+      p.then([=](bool){
+        if (!p.isFulfilled())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, [=](std::exception_ptr){
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier){
+      auto p = Promise2::Promise<bool>::New([] () -> bool { throw UserException(); }, CurrentContext::New());
+      p.then([=](bool){
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr){
+        if (!p.isRejected())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, CurrentContext::New());
     });
   // end of the init spec
   }
