@@ -250,6 +250,68 @@ namespace SpecFixedValue {
         else
           notifier->done();
       }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be fulfilled when the deferred task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
+      constexpr bool truth = true;
+      auto p = Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred){ 
+        deferred.setResult(truth); 
+      }, CurrentContext::New());
+
+      p.then([=](bool) {
+        if (!p.isFulfilled())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred){
+        deferred.setException(std::make_exception_ptr(UserException()));
+      }, CurrentContext::New());
+
+      p.then([=](bool) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        if (!p.isRejected())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be fulfilled from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
+      constexpr bool truth = true;
+      auto p = Promise2::Promise<bool>::New([=](){
+        return Promise2::Promise<bool>::Resolved(truth);
+      }, CurrentContext::New());
+
+      p.then([=](bool) {
+        if (!p.isFulfilled())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<bool>::New([]{
+        return Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException()));
+      }, CurrentContext::New());
+
+      p.then([=](bool) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        if (!p.isRejected())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, CurrentContext::New());
     });
   // end of the init spec
   }
