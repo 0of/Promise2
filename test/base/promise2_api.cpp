@@ -212,39 +212,45 @@ namespace SpecFixedValue {
 #ifdef __APPLE__
     INIT(MainThreadContext, GCDThreadContext:)
 #endif // __APPLE__
+  // end of the init spec
+  }
+} // SpecFixedValue
 
+namespace PromiseAPIsBase {
+  template<typename T>
+  void init(T& spec) {
     spec
     /* ==> */
-    .it("should be fulfilled", []{
+    .it("should be fulfilled", [] {
       auto p = Promise2::Promise<int>::Resolved(1);
       if (!p.isFulfilled())
         throw AssertionFailed();
     })
     /* ==> */
-    .it("should be rejected", []{
+    .it("should be rejected", [] {
       auto p = Promise2::Promise<int>::Rejected(std::make_exception_ptr(UserException()));
       if (!p.isRejected())
         throw AssertionFailed();
     })
     /* ==> */
-    .it("should be fulfilled when the task returned", [](const LTest::SharedCaseEndNotifier& notifier){
+    .it("should be fulfilled when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
       constexpr bool truth = true;
-      auto p = Promise2::Promise<bool>::New([=]{ return truth; }, CurrentContext::New());
-      p.then([=](bool){
+      auto p = Promise2::Promise<bool>::New([=] { return truth; }, CurrentContext::New());
+      p.then([=](bool) {
         if (!p.isFulfilled())
           notifier->fail(std::make_exception_ptr(AssertionFailed()));
         else
           notifier->done();
-      }, [=](std::exception_ptr){
+      }, [=](std::exception_ptr) {
         notifier->fail(std::make_exception_ptr(AssertionFailed()));
       }, CurrentContext::New());
     })
     /* ==> */
-    .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier){
-      auto p = Promise2::Promise<bool>::New([] () -> bool { throw UserException(); }, CurrentContext::New());
-      p.then([=](bool){
+    .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<bool>::New([]() -> bool { throw UserException(); }, CurrentContext::New());
+      p.then([=](bool) {
         notifier->fail(std::make_exception_ptr(AssertionFailed()));
-      }, [=](std::exception_ptr){
+      }, [=](std::exception_ptr) {
         if (!p.isRejected())
           notifier->fail(std::make_exception_ptr(AssertionFailed()));
         else
@@ -254,8 +260,8 @@ namespace SpecFixedValue {
     /* ==> */
     .it("should be fulfilled when the deferred task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
       constexpr bool truth = true;
-      auto p = Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred){ 
-        deferred.setResult(truth); 
+      auto p = Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred) {
+        deferred.setResult(truth);
       }, CurrentContext::New());
 
       p.then([=](bool) {
@@ -269,7 +275,7 @@ namespace SpecFixedValue {
     })
     /* ==> */
     .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
-      auto p = Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred){
+      auto p = Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred) {
         deferred.setException(std::make_exception_ptr(UserException()));
       }, CurrentContext::New());
 
@@ -285,7 +291,7 @@ namespace SpecFixedValue {
     /* ==> */
     .it("should be fulfilled from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
       constexpr bool truth = true;
-      auto p = Promise2::Promise<bool>::New([=](){
+      auto p = Promise2::Promise<bool>::New([=]() {
         return Promise2::Promise<bool>::Resolved(truth);
       }, CurrentContext::New());
 
@@ -300,7 +306,7 @@ namespace SpecFixedValue {
     })
     /* ==> */
     .it("should be rejected from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
-      auto p = Promise2::Promise<bool>::New([]{
+      auto p = Promise2::Promise<bool>::New([] {
         return Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException()));
       }, CurrentContext::New());
 
@@ -312,11 +318,73 @@ namespace SpecFixedValue {
         else
           notifier->done();
       }, CurrentContext::New());
-    });
-  // end of the init spec
-  }
-} // SpecFixedValue
+    })
+    /* ==> */
+    .it("should throw logic exception when calling `then` upon invalid promise", [] {
+      Promise2::Promise<bool> p;
 
-TEST_ENTRY(CONTAINER_TYPE, SPEC_TFN(SpecFixedValue::init))
+      try {
+        p.then([=](bool) {}, [=](std::exception_ptr) {}, CurrentContext::New());
+      } catch (const std::logic_error&) {
+        // pass
+        return;
+      }
+
+      throw AssertionFailed();
+    })
+    .it("should throw logic exception when calling `isRejected` upon invalid promise", [] {
+      Promise2::Promise<bool> p;
+
+      try {
+        p.isRejected();
+      } catch (const std::logic_error&) {
+        // pass
+        return;
+      }
+
+      throw AssertionFailed();
+    })
+    .it("should throw logic exception when calling `isFulfilled` upon invalid promise", [] {
+      Promise2::Promise<bool> p;
+
+      try {
+        p.isFulfilled();
+      }
+      catch (const std::logic_error&) {
+        // pass
+        return;
+      }
+
+      throw AssertionFailed();
+    });
+    // end of the init spec
+  }
+}
+
+namespace DataValidate {
+  // trivial type
+  struct data_trivial_type {
+
+  };
+
+  // pod type
+  struct data_pod_type {
+
+  };
+
+  // standard layout
+  struct standard_layout_type {
+
+  };
+
+  template<typename T>
+  void init(T& spec) {
+
+  }
+}
+
+TEST_ENTRY(CONTAINER_TYPE,
+  SPEC_TFN(SpecFixedValue::init),
+  SPEC_TFN(PromiseAPIsBase::init))
 
 #endif // PROMISE2_API_CPP
