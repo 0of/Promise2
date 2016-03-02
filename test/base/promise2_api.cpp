@@ -13,6 +13,11 @@
 #ifdef __APPLE__
 # define USE_DISPATCH 1
 #endif // __APPLE__
+
+#include <cstdint>
+#include <cmath>
+#include <climits>
+
 /*
  * testing APIs
  */
@@ -363,28 +368,132 @@ namespace PromiseAPIsBase {
 
 namespace DataValidate {
   // trivial type
-  struct data_trivial_type {
+  struct TrivialDataType {
+  protected:
+    std::int32_t m1;
+  public:
+    std::float_t m2;
+    std::double_t m3;
+    std::int64_t m4;
+    std::int8_t *m5;
 
+    void setM1(std::int32_t v) { m1 = v; }
+    std::int32_t getM1() const { return m1; }
   };
 
   // pod type
-  struct data_pod_type {
-
+  struct PodDataType {
+    std::int32_t m1;
+    std::float_t m2;
+    std::double_t m3;
+    std::int64_t m4;
+    std::int8_t *m5;
   };
 
   // standard layout
-  struct standard_layout_type {
+  struct StandardLayoutDataType {
+    std::int32_t m1;
+    std::float_t m2;
+    std::double_t m3;
+    std::int64_t m4;
+    std::int8_t *m5;
+
+    StandardLayoutDataType(std::int32_t m1)
+      : m1(5) {}
+  };
+
+  // normal class
+  class NormalClass {
+  private:
 
   };
 
+  // virtual methods class
+  class VirtualMethodClass {
+
+  };
+
+  void initTrivialDataType(TrivialDataType& trivialData) {
+    trivialData.setM1(5);
+    trivialData.m2 = 2.f;
+    trivialData.m3 = 32.;
+    trivialData.m4 = 129;
+    trivialData.m5 = nullptr;
+  }
+
+  bool validateTrivialDataType(const TrivialDataType& trivialData) {
+    return trivialData.getM1() == 5 &&
+      (std::fabs(trivialData.m2 - 2.f) < std::numeric_limits<decltype(trivialData.m2)>::epsilon()) &&
+      (std::fabs(trivialData.m3 - 32.) < std::numeric_limits<decltype(trivialData.m3)>::epsilon()) &&
+      trivialData.m4 == 129 &&
+      trivialData.m5 == nullptr;
+  }
+
+#define DATATEST_INIT(context, tag) \
+    spec \
+     /* ==> */ \
+    .it(#tag"should fulfill trivial type instance correctly", [](const LTest::SharedCaseEndNotifier& notifier){ \
+      Promise2::Promise<TrivialDataType>::New([] { \
+        TrivialDataType data; \
+        initTrivialDataType(data); \
+        return data; \
+      }, context::New()).then([=](TrivialDataType data) { \
+        if (!validateTrivialDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill trivial type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<TrivialDataType>::New([](Promise2::PromiseDefer<TrivialDataType>&& deferred) { \
+        TrivialDataType data; \
+        initTrivialDataType(data); \
+        deferred.setResult(data); \
+      }, context::New()).then([=](TrivialDataType data) { \
+        if (!validateTrivialDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill trivial type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<TrivialDataType>::New([]() { \
+        TrivialDataType data; \
+        initTrivialDataType(data); \
+        return Promise2::Promise<TrivialDataType>::Resolved(data); \
+      }, context::New()).then([=](TrivialDataType data) { \
+        if (!validateTrivialDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    });
+
   template<typename T>
   void init(T& spec) {
-
+    DATATEST_INIT(CurrentContext, CurrentContext:)
+    DATATEST_INIT(STLThreadContext, STLThreadContext:)
+#ifdef __APPLE__
+    DATATEST_INIT(MainThreadContext, GCDThreadContext:)
+#endif // __APPLE__
+    // raw pointer
+    // single numbers
+    // string
+    // shared_ptr
   }
 }
 
 TEST_ENTRY(CONTAINER_TYPE,
   SPEC_TFN(SpecFixedValue::init),
-  SPEC_TFN(PromiseAPIsBase::init))
+  SPEC_TFN(PromiseAPIsBase::init),
+  SPEC_TFN(DataValidate::init))
 
 #endif // PROMISE2_API_CPP
