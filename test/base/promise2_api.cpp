@@ -445,6 +445,36 @@ namespace DataValidate {
       }, [=](std::exception_ptr) { \
         notifier->fail(std::make_exception_ptr(AssertionFailed())); \
       }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill trivial type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<TrivialDataType>::New([](Promise2::PromiseDefer<TrivialDataType>&& deferred) { \
+        TrivialDataType data; \
+        initTrivialDataType(data); \
+        deferred.setResult(data); \
+      }, context::New()).then([=](TrivialDataType data) { \
+        if (!validateTrivialDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill trivial type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<TrivialDataType>::New([]() { \
+        TrivialDataType data; \
+        initTrivialDataType(data); \
+        return Promise2::Promise<TrivialDataType>::Resolved(data); \
+      }, context::New()).then([=](TrivialDataType data) { \
+        if (!validateTrivialDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
     });
 
   template<typename T>
