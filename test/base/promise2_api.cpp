@@ -398,7 +398,7 @@ namespace DataValidate {
     std::int64_t m4;
     std::int8_t *m5;
 
-    StandardLayoutDataType(std::int32_t m1)
+    StandardLayoutDataType()
       : m1(5) {}
   };
 
@@ -413,20 +413,39 @@ namespace DataValidate {
 
   };
 
+  template<typename T>
+  void initCommonData(T& data) {
+    data.m2 = 2.f;
+    data.m3 = 32.;
+    data.m4 = 129;
+    data.m5 = nullptr;
+  }
+
+  template<typename T>
+  bool validateCommonData(const T& data) {
+    return (std::fabs(data.m2 - 2.f) < std::numeric_limits<decltype(data.m2)>::epsilon()) &&
+           (std::fabs(data.m3 - 32.) < std::numeric_limits<decltype(data.m3)>::epsilon()) &&
+            data.m4 == 129 &&
+            data.m5 == nullptr;
+  }
+
   void initTrivialDataType(TrivialDataType& trivialData) {
     trivialData.setM1(5);
-    trivialData.m2 = 2.f;
-    trivialData.m3 = 32.;
-    trivialData.m4 = 129;
-    trivialData.m5 = nullptr;
+    initCommonData(trivialData);
+  }
+
+  void initPodDataType(PodDataType& podData) {
+    podData.m1 = 5;
+    initCommonData(podData);
   }
 
   bool validateTrivialDataType(const TrivialDataType& trivialData) {
-    return trivialData.getM1() == 5 &&
-      (std::fabs(trivialData.m2 - 2.f) < std::numeric_limits<decltype(trivialData.m2)>::epsilon()) &&
-      (std::fabs(trivialData.m3 - 32.) < std::numeric_limits<decltype(trivialData.m3)>::epsilon()) &&
-      trivialData.m4 == 129 &&
-      trivialData.m5 == nullptr;
+    return trivialData.getM1() == 5 && validateCommonData(trivialData);
+  }
+
+  template<typename StandardLayoutType>
+  bool validateStandardLayoutDataType(const StandardLayoutType& data) {
+    return data.m1 == 5 && validateCommonData(data);
   }
 
 #define DATATEST_INIT(context, tag) \
@@ -469,6 +488,96 @@ namespace DataValidate {
         return Promise2::Promise<TrivialDataType>::Resolved(data); \
       }, context::New()).then([=](TrivialDataType data) { \
         if (!validateTrivialDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill pod type instance correctly", [](const LTest::SharedCaseEndNotifier& notifier){ \
+      Promise2::Promise<PodDataType>::New([] { \
+        PodDataType data; \
+        initPodDataType(data); \
+        return data; \
+      }, context::New()).then([=](PodDataType data) { \
+        if (!validateStandardLayoutDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill pod type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<PodDataType>::New([](Promise2::PromiseDefer<PodDataType>&& deferred) { \
+        PodDataType data; \
+        initPodDataType(data); \
+        deferred.setResult(data); \
+      }, context::New()).then([=](PodDataType data) { \
+        if (!validateStandardLayoutDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill pod type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<PodDataType>::New([]() { \
+        PodDataType data; \
+        initPodDataType(data); \
+        return Promise2::Promise<PodDataType>::Resolved(data); \
+      }, context::New()).then([=](PodDataType data) { \
+        if (!validateStandardLayoutDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill standard layout type instance correctly", [](const LTest::SharedCaseEndNotifier& notifier){ \
+      Promise2::Promise<StandardLayoutDataType>::New([] { \
+        StandardLayoutDataType data; \
+        initCommonData(data); \
+        return data; \
+      }, context::New()).then([=](StandardLayoutDataType data) { \
+        if (!validateStandardLayoutDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill standard layout type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<StandardLayoutDataType>::New([](Promise2::PromiseDefer<StandardLayoutDataType>&& deferred) { \
+        StandardLayoutDataType data; \
+        initCommonData(data); \
+        deferred.setResult(data); \
+      }, context::New()).then([=](StandardLayoutDataType data) { \
+        if (!validateStandardLayoutDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill standard layout type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<StandardLayoutDataType>::New([]() { \
+        StandardLayoutDataType data; \
+        initCommonData(data); \
+        return Promise2::Promise<StandardLayoutDataType>::Resolved(data); \
+      }, context::New()).then([=](StandardLayoutDataType data) { \
+        if (!validateStandardLayoutDataType(data)) \
           notifier->fail(std::make_exception_ptr(AssertionFailed())); \
         else \
           notifier->done(); \
