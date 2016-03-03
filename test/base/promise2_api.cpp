@@ -557,7 +557,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill standard layout type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<StandardLayoutDataType>::New([](Promise2::PromiseDefer<PodDataType>&& deferred) { \
+      Promise2::Promise<StandardLayoutDataType>::New([](Promise2::PromiseDefer<StandardLayoutDataType>&& deferred) { \
         StandardLayoutDataType data; \
         initCommonData(data); \
         deferred.setResult(data); \
@@ -576,7 +576,7 @@ namespace DataValidate {
         StandardLayoutDataType data; \
         initCommonData(data); \
         return Promise2::Promise<StandardLayoutDataType>::Resolved(data); \
-      }, context::New()).then([=](PodDataType data) { \
+      }, context::New()).then([=](StandardLayoutDataType data) { \
         if (!validateStandardLayoutDataType(data)) \
           notifier->fail(std::make_exception_ptr(AssertionFailed())); \
         else \
