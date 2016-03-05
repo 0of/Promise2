@@ -17,6 +17,9 @@
 #include <cstdint>
 #include <cmath>
 #include <climits>
+#include <algorithm>
+#include <string>
+#include <vector>
 
 /*
  * testing APIs
@@ -405,12 +408,61 @@ namespace DataValidate {
   // normal class
   class NormalClass {
   private:
+    static constexpr const char *stringValue = "const string";
+    static constexpr std::int32_t arrayValues[] = { 2, 3, 4 };
 
+  public:
+    static bool validate(const NormalClass&);
+
+  private:
+    std::string c1;
+    std::vector<std::int32_t> c2;
+
+  protected:
+    std::int32_t m1;
+
+  public:
+    std::float_t m2;
+    std::double_t m3;
+    std::int64_t m4;
+    std::int8_t *m5;
+
+  public:
+    NormalClass();
+    NormalClass(const NormalClass& c);
+
+    ~NormalClass() 
+    {}
   };
 
   // virtual methods class
   class VirtualMethodClass {
+  private:
+    static constexpr const char *stringValue = "virtual const string";
+    static constexpr std::int32_t arrayValues[] = { 2, 3, 4 };
 
+  public:
+    static bool validate(const VirtualMethodClass&);
+
+  private:
+    std::string c1;
+    std::vector<std::int32_t> c2;
+
+  protected:
+    std::int32_t m1;
+
+  public:
+    std::float_t m2;
+    std::double_t m3;
+    std::int64_t m4;
+    std::int8_t *m5;
+
+  public:
+    VirtualMethodClass();
+    virtual ~VirtualMethodClass() = default;
+
+  public:
+    virtual void methodDef() {}
   };
 
   template<typename T>
@@ -446,6 +498,50 @@ namespace DataValidate {
   template<typename StandardLayoutType>
   bool validateStandardLayoutDataType(const StandardLayoutType& data) {
     return data.m1 == 5 && validateCommonData(data);
+  }
+
+  bool NormalClass::validate(const NormalClass& c) {
+    return c.c1 == stringValue && 
+      std::equal(c.c2.begin(), c.c2.end(), arrayValues) &&
+      c.m1 == 5 &&
+      validateCommonData(c);
+  }
+
+  template<typename T, std::uint32_t sizeofArray>
+  static T* end(T(&array)[sizeofArray]) {
+    return std::decay_t<decltype(array)>(array) + sizeofArray;
+  }
+
+  NormalClass::NormalClass()
+    : c1{ stringValue }
+    , c2{ arrayValues, end(arrayValues) }
+    , m1{ 5 } {
+    initCommonData(*this);
+  }
+
+  NormalClass::NormalClass(const NormalClass& c)
+    : c1{ c.c1 }
+    , c2{ c.c2 }
+    , m1{ c.m1 }
+    , m2{ c.m2 }
+    , m3{ c.m3 }
+    , m4{ c.m4 }
+    , m5{ c.m5 } {
+
+  }
+
+  bool VirtualMethodClass::validate(const VirtualMethodClass& c) {
+    return c.c1 == stringValue &&
+      std::equal(c.c2.begin(), c.c2.end(), arrayValues) &&
+      c.m1 == 5 &&
+      validateCommonData(c);
+  }
+
+  VirtualMethodClass::VirtualMethodClass()
+    : c1{ stringValue }
+    , c2{ arrayValues, end(arrayValues) }
+    , m1{ 5 } {
+    initCommonData(*this);
   }
 
 #define DATATEST_INIT(context, tag) \
@@ -578,6 +674,89 @@ namespace DataValidate {
         return Promise2::Promise<StandardLayoutDataType>::Resolved(data); \
       }, context::New()).then([=](StandardLayoutDataType data) { \
         if (!validateStandardLayoutDataType(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill normal class instance correctly", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<NormalClass>::New([] { \
+        NormalClass data; \
+        return data; \
+      }, context::New()).then([=](NormalClass data) { \
+        if (!NormalClass::validate(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill normal class instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<NormalClass>::New([](Promise2::PromiseDefer<NormalClass>&& deferred) { \
+        NormalClass data; \
+        deferred.setResult(data); \
+      }, context::New()).then([=](NormalClass data) { \
+        if (!NormalClass::validate(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill normal class instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<NormalClass>::New([]() { \
+        NormalClass data; \
+        return Promise2::Promise<NormalClass>::Resolved(data); \
+      }, context::New()).then([=](NormalClass data) { \
+        if (!NormalClass::validate(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    .it(#tag"should fulfill virtual class instance correctly", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<VirtualMethodClass>::New([] { \
+        VirtualMethodClass data; \
+        return data; \
+      }, context::New()).then([=](VirtualMethodClass data) { \
+        if (!VirtualMethodClass::validate(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill virtual class instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<VirtualMethodClass>::New([](Promise2::PromiseDefer<VirtualMethodClass>&& deferred) { \
+        VirtualMethodClass data; \
+        deferred.setResult(data); \
+      }, context::New()).then([=](VirtualMethodClass data) { \
+        if (!VirtualMethodClass::validate(data)) \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        else \
+          notifier->done(); \
+      }, [=](std::exception_ptr) { \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill virtual class instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      Promise2::Promise<VirtualMethodClass>::New([]() { \
+        VirtualMethodClass data; \
+        return Promise2::Promise<VirtualMethodClass>::Resolved(data); \
+      }, context::New()).then([=](VirtualMethodClass data) { \
+        if (!VirtualMethodClass::validate(data)) \
           notifier->fail(std::make_exception_ptr(AssertionFailed())); \
         else \
           notifier->done(); \
