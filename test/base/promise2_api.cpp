@@ -499,6 +499,15 @@ namespace DataValidate {
   bool validateStandardLayoutDataType(const StandardLayoutType& data) {
     return data.m1 == 5 && validateCommonData(data);
   }
+    
+#if !defined(_MSC_VER)
+  // 
+  constexpr const char *NormalClass::stringValue;
+  constexpr std::int32_t NormalClass::arrayValues[];
+
+  constexpr const char *VirtualMethodClass::stringValue;
+  constexpr std::int32_t VirtualMethodClass::arrayValues[];
+#endif // _MSC_VER
 
   bool NormalClass::validate(const NormalClass& c) {
     return c.c1 == stringValue && 
