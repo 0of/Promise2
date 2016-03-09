@@ -105,6 +105,111 @@ class AssertionFailed : public std::exception {};
 
 using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
 
+template<typename T>
+class WrappedOnRejectPromise;
+
+template<typename OnRejectReturnType>
+struct DoWrapOnReject {
+  template<typename OnReject>
+  static auto wrap(OnReject&& onReject) {
+    return std::move(onReject);
+  }
+};
+
+template<>
+struct DoWrapOnReject<void> {
+  template<typename OnReject>
+  static auto wrap(OnReject&& onReject) {
+    auto wrappedOnRejected = [reject = std::move(onReject)] (std::exception_ptr e) {
+      reject(e);
+      return Promise2::Promise<void>::Resolved();
+    };
+    return std::move(wrappedOnRejected);
+  }
+};
+
+template<typename T>
+struct WrappedPromiseResolved {
+  template<typename ArgType>
+  static WrappedOnRejectPromise<T> Resolved(ArgType&& arg);
+
+  static WrappedOnRejectPromise<T> Resolved();
+};
+
+template<>
+struct WrappedPromiseResolved<void> {
+  template<typename ArgType>
+  static WrappedOnRejectPromise<void> Resolved(ArgType&& arg);
+
+  static WrappedOnRejectPromise<void> Resolved();
+};
+
+//
+// bind `OnReject` function to new signature `OnReject -> std::exception_ptr -> Promise<T>`
+//
+template<typename T>
+class WrappedOnRejectPromise : public Promise2::Promise<T> {
+public:
+  template<typename Task>
+  static WrappedOnRejectPromise<T> New(Task&& task, Promise2::ThreadContext* &&context) {
+    auto promise = Promise2::Promise<T>::New(std::move(task), std::move(context));
+    return WrappedOnRejectPromise<T>{ promise };
+  }
+
+  template<typename ArgType>
+  static WrappedOnRejectPromise<T> Resolved(ArgType&& arg) {
+    return WrappedPromiseResolved<T>::Resolved(std::forward<ArgType>(arg));
+  }
+
+  static WrappedOnRejectPromise<T> Resolved() {
+    return WrappedPromiseResolved<T>::Resolved();
+  }
+
+  static WrappedOnRejectPromise<T> Rejected(std::exception_ptr e) {
+    auto promise = Promise2::Promise<T>::Rejected(e);
+    return WrappedOnRejectPromise<T>{ promise };
+  }
+
+public:
+  WrappedOnRejectPromise() = default;
+  WrappedOnRejectPromise(const Promise2::Promise<T>& p)
+    : Promise2::Promise<T>(p)
+  {}
+    
+public:
+  template<typename OnFulfill, typename OnReject>
+  auto then(OnFulfill&& onFulfill,
+            OnReject&& onReject,
+            Promise2::ThreadContext* &&context) {
+    auto wrappedOnRejected = DoWrapOnReject<typename declfn(onReject)::result_type>::wrap(std::move(onReject));
+    auto promise = Promise2::Promise<T>::then(std::move(onFulfill), std::move(wrappedOnRejected), std::move(context));
+
+      return WrappedOnRejectPromise<typename decltype(promise)::PromiseType>{ promise };
+  }
+};
+
+template<typename T>
+template<typename ArgType>
+WrappedOnRejectPromise<T> WrappedPromiseResolved<T>::Resolved(ArgType&& arg) {
+  auto promise = Promise2::Promise<T>::Resolved(std::forward<ArgType>(arg));
+  return WrappedOnRejectPromise<T>{ promise };
+}
+
+template<typename T>
+WrappedOnRejectPromise<T> WrappedPromiseResolved<T>::Resolved() {
+  return WrappedOnRejectPromise<T>{};
+}
+
+template<typename ArgType>
+WrappedOnRejectPromise<void> WrappedPromiseResolved<void>::Resolved(ArgType&& arg) {
+  return WrappedOnRejectPromise<void>{};
+}
+
+WrappedOnRejectPromise<void> WrappedPromiseResolved<void>::Resolved() {
+  auto promise = Promise2::Promise<void>::Resolved();
+  return WrappedOnRejectPromise<void>{ promise };
+}
+
 namespace SpecFixedValue {
   void passUserException(const LTest::SharedCaseEndNotifier& notifier, std::exception_ptr e) {
     if (e) {
@@ -126,7 +231,7 @@ namespace SpecFixedValue {
      /* ==> */ \
     .it(#tag"should acquire the fulfilled value", [](const LTest::SharedCaseEndNotifier& notifier){ \
       constexpr bool truth = true; \
-      Promise2::Promise<bool>::Resolved(truth).then([=](bool fulfilled){ \
+      WrappedOnRejectPromise<bool>::Resolved(truth).then([=](bool fulfilled){ \
         if (truth != fulfilled) { \
           notifier->fail(std::make_exception_ptr(AssertionFailed())); \
           return; \
@@ -139,7 +244,7 @@ namespace SpecFixedValue {
     \
     /* ==> */ \
     .it(#tag"should transfer the exception downstream", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool){ \
+      WrappedOnRejectPromise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool){ \
         notifier->fail(std::make_exception_ptr(AssertionFailed())); \
       }, std::bind(passUserException, notifier, std::placeholders::_1), context::New()); \
     }) \
@@ -147,7 +252,7 @@ namespace SpecFixedValue {
     /* ==> */ \
     .it(#tag"should acquire the fulfilled value from returned task", [](const LTest::SharedCaseEndNotifier& notifier){ \
       constexpr bool truth = true; \
-      Promise2::Promise<bool>::New([=]{ return truth; }, context::New()).then([=](bool fulfilled){ \
+      WrappedOnRejectPromise<bool>::New([=]{ return truth; }, context::New()).then([=](bool fulfilled){ \
         if (truth != fulfilled) { \
           notifier->fail(std::make_exception_ptr(AssertionFailed())); \
           return; \
@@ -160,7 +265,7 @@ namespace SpecFixedValue {
     \
     /* ==> */ \
     .it(#tag"should transfer the exception downstream from returned task", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<bool>::New([]() -> bool { throw UserException(); }, context::New()).then([=](bool){ \
+      WrappedOnRejectPromise<bool>::New([]() -> bool { throw UserException(); }, context::New()).then([=](bool){ \
         notifier->fail(std::make_exception_ptr(AssertionFailed())); \
       }, std::bind(passUserException, notifier, std::placeholders::_1), context::New()); \
     }) \
@@ -168,7 +273,7 @@ namespace SpecFixedValue {
     /* ==> */ \
     .it(#tag"should acquire the fulfilled value from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier){ \
       constexpr bool truth = true; \
-      Promise2::Promise<bool>::New([=]{ return Promise2::Promise<bool>::Resolved(truth); }, context::New()).then([=](bool fulfilled){ \
+      WrappedOnRejectPromise<bool>::New([=]{ return Promise2::Promise<bool>::Resolved(truth); }, context::New()).then([=](bool fulfilled){ \
         if (truth != fulfilled) { \
           notifier->fail(std::make_exception_ptr(AssertionFailed())); \
           return; \
@@ -181,7 +286,7 @@ namespace SpecFixedValue {
     \
     /* ==> */ \
     .it(#tag"should transfer the exception downstream from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<bool>::New([]{ \
+      WrappedOnRejectPromise<bool>::New([]{ \
         return Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())); \
       }, context::New()).then([=](bool fulfilled){ \
        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
@@ -191,7 +296,7 @@ namespace SpecFixedValue {
     /* ==> */ \
     .it(#tag"should acquire the fulfilled value from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier){ \
       constexpr bool truth = true; \
-      Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred){ \
+      WrappedOnRejectPromise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred){ \
         deferred.setResult(truth); \
       }, context::New()).then([=](bool fulfilled){ \
         if (truth != fulfilled) { \
@@ -206,7 +311,7 @@ namespace SpecFixedValue {
     \
     /* ==> */ \
     .it(#tag"should transfer the exception downstream from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred){ \
+      WrappedOnRejectPromise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred){ \
         deferred.setException(std::make_exception_ptr(UserException())); \
       }, context::New()).then([=](bool fulfilled){ \
        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
@@ -243,7 +348,7 @@ namespace PromiseAPIsBase {
     /* ==> */
     .it("should be fulfilled when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
       constexpr bool truth = true;
-      auto p = Promise2::Promise<bool>::New([=] { return truth; }, CurrentContext::New());
+      auto p = WrappedOnRejectPromise<bool>::New([=] { return truth; }, CurrentContext::New());
       p.then([=](bool) {
         if (!p.isFulfilled())
           notifier->fail(std::make_exception_ptr(AssertionFailed()));
@@ -255,7 +360,7 @@ namespace PromiseAPIsBase {
     })
     /* ==> */
     .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
-      auto p = Promise2::Promise<bool>::New([]() -> bool { throw UserException(); }, CurrentContext::New());
+      auto p = WrappedOnRejectPromise<bool>::New([]() -> bool { throw UserException(); }, CurrentContext::New());
       p.then([=](bool) {
         notifier->fail(std::make_exception_ptr(AssertionFailed()));
       }, [=](std::exception_ptr) {
@@ -268,7 +373,7 @@ namespace PromiseAPIsBase {
     /* ==> */
     .it("should be fulfilled when the deferred task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
       constexpr bool truth = true;
-      auto p = Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred) {
+      auto p = WrappedOnRejectPromise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred) {
         deferred.setResult(truth);
       }, CurrentContext::New());
 
@@ -283,7 +388,7 @@ namespace PromiseAPIsBase {
     })
     /* ==> */
     .it("should be rejected when the task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
-      auto p = Promise2::Promise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred) {
+      auto p = WrappedOnRejectPromise<bool>::New([](Promise2::PromiseDefer<bool>&& deferred) {
         deferred.setException(std::make_exception_ptr(UserException()));
       }, CurrentContext::New());
 
@@ -299,7 +404,7 @@ namespace PromiseAPIsBase {
     /* ==> */
     .it("should be fulfilled from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
       constexpr bool truth = true;
-      auto p = Promise2::Promise<bool>::New([=]() {
+      auto p = WrappedOnRejectPromise<bool>::New([=]() {
         return Promise2::Promise<bool>::Resolved(truth);
       }, CurrentContext::New());
 
@@ -314,7 +419,7 @@ namespace PromiseAPIsBase {
     })
     /* ==> */
     .it("should be rejected from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
-      auto p = Promise2::Promise<bool>::New([] {
+      auto p = WrappedOnRejectPromise<bool>::New([] {
         return Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException()));
       }, CurrentContext::New());
 
@@ -329,7 +434,7 @@ namespace PromiseAPIsBase {
     })
     /* ==> */
     .it("should throw logic exception when calling `then` upon invalid promise", [] {
-      Promise2::Promise<bool> p;
+      WrappedOnRejectPromise<bool> p;
 
       try {
         p.then([=](bool) {}, [=](std::exception_ptr) {}, CurrentContext::New());
@@ -557,7 +662,7 @@ namespace DataValidate {
     spec \
      /* ==> */ \
     .it(#tag"should fulfill trivial type instance correctly", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<TrivialDataType>::New([] { \
+      WrappedOnRejectPromise<TrivialDataType>::New([] { \
         TrivialDataType data; \
         initTrivialDataType(data); \
         return data; \
@@ -572,7 +677,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill trivial type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<TrivialDataType>::New([](Promise2::PromiseDefer<TrivialDataType>&& deferred) { \
+      WrappedOnRejectPromise<TrivialDataType>::New([](Promise2::PromiseDefer<TrivialDataType>&& deferred) { \
         TrivialDataType data; \
         initTrivialDataType(data); \
         deferred.setResult(data); \
@@ -587,7 +692,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill trivial type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<TrivialDataType>::New([]() { \
+      WrappedOnRejectPromise<TrivialDataType>::New([]() { \
         TrivialDataType data; \
         initTrivialDataType(data); \
         return Promise2::Promise<TrivialDataType>::Resolved(data); \
@@ -602,7 +707,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill pod type instance correctly", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<PodDataType>::New([] { \
+      WrappedOnRejectPromise<PodDataType>::New([] { \
         PodDataType data; \
         initPodDataType(data); \
         return data; \
@@ -617,7 +722,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill pod type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<PodDataType>::New([](Promise2::PromiseDefer<PodDataType>&& deferred) { \
+      WrappedOnRejectPromise<PodDataType>::New([](Promise2::PromiseDefer<PodDataType>&& deferred) { \
         PodDataType data; \
         initPodDataType(data); \
         deferred.setResult(data); \
@@ -632,7 +737,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill pod type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<PodDataType>::New([]() { \
+      WrappedOnRejectPromise<PodDataType>::New([]() { \
         PodDataType data; \
         initPodDataType(data); \
         return Promise2::Promise<PodDataType>::Resolved(data); \
@@ -647,7 +752,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill standard layout type instance correctly", [](const LTest::SharedCaseEndNotifier& notifier){ \
-      Promise2::Promise<StandardLayoutDataType>::New([] { \
+      WrappedOnRejectPromise<StandardLayoutDataType>::New([] { \
         StandardLayoutDataType data; \
         initCommonData(data); \
         return data; \
@@ -662,7 +767,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill standard layout type instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<StandardLayoutDataType>::New([](Promise2::PromiseDefer<StandardLayoutDataType>&& deferred) { \
+      WrappedOnRejectPromise<StandardLayoutDataType>::New([](Promise2::PromiseDefer<StandardLayoutDataType>&& deferred) { \
         StandardLayoutDataType data; \
         initCommonData(data); \
         deferred.setResult(data); \
@@ -677,7 +782,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill standard layout type instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<StandardLayoutDataType>::New([]() { \
+      WrappedOnRejectPromise<StandardLayoutDataType>::New([]() { \
         StandardLayoutDataType data; \
         initCommonData(data); \
         return Promise2::Promise<StandardLayoutDataType>::Resolved(data); \
@@ -692,7 +797,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill normal class instance correctly", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<NormalClass>::New([] { \
+      WrappedOnRejectPromise<NormalClass>::New([] { \
         NormalClass data; \
         return data; \
       }, context::New()).then([=](NormalClass data) { \
@@ -706,7 +811,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill normal class instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<NormalClass>::New([](Promise2::PromiseDefer<NormalClass>&& deferred) { \
+      WrappedOnRejectPromise<NormalClass>::New([](Promise2::PromiseDefer<NormalClass>&& deferred) { \
         NormalClass data; \
         deferred.setResult(data); \
       }, context::New()).then([=](NormalClass data) { \
@@ -720,7 +825,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill normal class instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<NormalClass>::New([]() { \
+      WrappedOnRejectPromise<NormalClass>::New([]() { \
         NormalClass data; \
         return Promise2::Promise<NormalClass>::Resolved(data); \
       }, context::New()).then([=](NormalClass data) { \
@@ -733,7 +838,7 @@ namespace DataValidate {
       }, context::New()); \
     }) \
     .it(#tag"should fulfill virtual class instance correctly", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<VirtualMethodClass>::New([] { \
+      WrappedOnRejectPromise<VirtualMethodClass>::New([] { \
         VirtualMethodClass data; \
         return data; \
       }, context::New()).then([=](VirtualMethodClass data) { \
@@ -747,7 +852,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill virtual class instance correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<VirtualMethodClass>::New([](Promise2::PromiseDefer<VirtualMethodClass>&& deferred) { \
+      WrappedOnRejectPromise<VirtualMethodClass>::New([](Promise2::PromiseDefer<VirtualMethodClass>&& deferred) { \
         VirtualMethodClass data; \
         deferred.setResult(data); \
       }, context::New()).then([=](VirtualMethodClass data) { \
@@ -761,7 +866,7 @@ namespace DataValidate {
     }) \
     /* ==> */ \
     .it(#tag"should fulfill virtual class instance correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
-      Promise2::Promise<VirtualMethodClass>::New([]() { \
+      WrappedOnRejectPromise<VirtualMethodClass>::New([]() { \
         VirtualMethodClass data; \
         return Promise2::Promise<VirtualMethodClass>::Resolved(data); \
       }, context::New()).then([=](VirtualMethodClass data) { \
@@ -789,8 +894,8 @@ namespace DataValidate {
 }
 
 TEST_ENTRY(CONTAINER_TYPE,
-  SPEC_TFN(SpecFixedValue::init),
-  SPEC_TFN(PromiseAPIsBase::init),
-  SPEC_TFN(DataValidate::init))
+   SPEC_TFN(SpecFixedValue::init),
+   SPEC_TFN(PromiseAPIsBase::init),
+   SPEC_TFN(DataValidate::init))
 
 #endif // PROMISE2_API_CPP
