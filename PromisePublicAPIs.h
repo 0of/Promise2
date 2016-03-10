@@ -27,6 +27,7 @@ namespace Promise2 {
 
   template<typename T> class Promise;
   template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<T>>;
+  template<typename T> using OnRejectFunction = std::function<Promise<T>(std::exception_ptr)>;
   // !
 
   //
@@ -118,19 +119,19 @@ namespace Promise2 {
     template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node,
                                std::function<NextT(T)>&& onFulfill, 
-                               std::function<void(std::exception_ptr)>&& onReject, 
+                               OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
     template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node,
                                std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
-                               std::function<void(std::exception_ptr)>&& onReject, 
+                               OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
     template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node, 
                                std::function<Promise<NextT>(T)>&& onFulfill,
-                               std::function<void(std::exception_ptr)>&& onReject, 
+                               OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
     // matching nothing
@@ -143,19 +144,19 @@ namespace Promise2 {
     template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<void>& node,
                                std::function<NextT(void)>&& onFulfill, 
-                               std::function<void(std::exception_ptr)>&& onReject, 
+                               OnRejectFunction<NextT>&& onReject,
                                ThreadContext* &&context);
 
     template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<void>& node,
                                std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
-                               std::function<void(std::exception_ptr)>&& onReject, 
+                               OnRejectFunction<NextT>&& onReject,
                                ThreadContext* &&context);
 
     template<typename NextT>
     static Promise<NextT> Then(SharedPromiseNode<void>& node, 
                                std::function<Promise<NextT>(void)>&& onFulfill,
-                               std::function<void(std::exception_ptr)>&& onReject, 
+                               OnRejectFunction<NextT>&& onReject,
                                ThreadContext* &&context);
 
     // matching nothing
@@ -174,6 +175,9 @@ namespace Promise2 {
     using SelfType = Promise<T>;
 
     friend class PromiseSpawner<T>;
+
+  public:
+    using PromiseType = T;
 
   public:
     template<typename ArgType>
@@ -234,6 +238,9 @@ namespace Promise2 {
 
     using Thenable = PromiseThenable<void>;
     using SelfType = Promise<void>;
+
+  public:
+    using PromiseType = void;
 
   public:
     static SelfType Resolved();

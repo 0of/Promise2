@@ -25,7 +25,7 @@ namespace Promise2 {
    { Promise<T> spawned; \
    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
    auto node = std::make_shared<internal<T, void, std::true_type>>(std::move(task), \
-                  std::function<void(std::exception_ptr)>(), sharedContext); \
+                  std::function<Promise<T>(std::exception_ptr)>(), sharedContext); \
    auto runnable = std::bind(&Details::PromiseNode<T>::run, node); \
    sharedContext->scheduleToRun(std::move(runnable)); \
    \
@@ -81,14 +81,14 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
                              std::function<NextT(T)>&& onFulfill,
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context) 
     THEN_IMP(Details::PromiseNodeInternal, T)
 
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node,
                              std::function<NextT(void)>&& onFulfill,
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
     THEN_IMP(Details::PromiseNodeInternal, void)
 
@@ -98,14 +98,14 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
                              std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
     THEN_IMP(Details::DeferredPromiseNodeInternal, T)
 
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node,
                              std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
     THEN_IMP(Details::DeferredPromiseNodeInternal, void)
 #else
@@ -113,7 +113,7 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
                              std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction&& onReject, 
                              ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `DEFERRED_PROMISE` in `PromiseConfig.h`");
   }
@@ -121,7 +121,7 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node,
                              std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction&& onReject, 
                              ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `DEFERRED_PROMISE` in `PromiseConfig.h`");
   }
@@ -132,14 +132,14 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node, 
                              std::function<Promise<NextT>(T)>&& onFulfill,
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
     THEN_IMP(Details::NestingPromiseNodeInternal, T)
 
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node, 
                              std::function<Promise<NextT>(void)>&& onFulfill,
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
     THEN_IMP(Details::NestingPromiseNodeInternal, void)
 #else
@@ -147,7 +147,7 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node, 
                              std::function<Promise<NextT>(T)>&& onFulfill,
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction&& onReject, 
                              ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `NESTING_PROMISE` in `PromiseConfig.h`");
   }
@@ -155,7 +155,7 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node, 
                              std::function<Promise<NextT>(void)>&& onFulfill,
-                             std::function<void(std::exception_ptr)>&& onReject, 
+                             OnRejectFunction&& onReject, 
                              ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `NESTING_PROMISE` in `PromiseConfig.h`");
   }

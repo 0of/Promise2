@@ -402,11 +402,11 @@ namespace Promise2 {
       DeferPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
 
-      std::function<void(std::exception_ptr)> _onReject;
+      OnRejectFunction<ReturnType> _onReject;
       std::once_flag _called;
 
     public:
-      PromiseNodeInternalBase(std::function<void(std::exception_ptr)>&& onReject,
+      PromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
         , PreviousRetrievable()
@@ -438,7 +438,8 @@ namespace Promise2 {
       void runReject() noexcept {
         if (_onReject) {
           try {
-            _onReject(std::current_exception());
+            // chain the returned promise
+            _onReject(std::current_exception()).internal()->chainNext(_forward);
           } catch (...) {
             _forward->reject(std::current_exception());
           }
@@ -498,7 +499,7 @@ namespace Promise2 {
 
     public:
       PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
-                  std::function<void(std::exception_ptr)>&& onReject,
+                  OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
         , _onFulfill{ std::move(onFulfill) }
@@ -546,7 +547,7 @@ namespace Promise2 {
 
     public:
       PromiseNodeInternal(std::function<ReturnType()>&& onFulfill, 
-                  std::function<void(std::exception_ptr)>&& onReject,
+                  OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
         , _onFulfill{ std::move(onFulfill) }
