@@ -880,7 +880,7 @@ namespace DataValidate {
     }) \
     .it(#tag"should fulfill raw pointer correctly", [](const LTest::SharedCaseEndNotifier& notifier) { \
       NormalClass *instancePtr = new NormalClass; \
-      Promise2::Promise<NormalClass *>::New([=] { \
+      WrappedOnRejectPromise<NormalClass *>::New([=] { \
         return instancePtr; \
       }, context::New()).then([=](NormalClass *returned) { \
         if (instancePtr == returned && NormalClass::validate(*returned)) \
@@ -898,7 +898,7 @@ namespace DataValidate {
     /* ==> */ \
     .it(#tag"should fulfill raw pointer correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
       NormalClass *instancePtr = new NormalClass; \
-      Promise2::Promise<NormalClass *>::New([=](Promise2::PromiseDefer<NormalClass *>&& deferred) { \
+      WrappedOnRejectPromise<NormalClass *>::New([=](Promise2::PromiseDefer<NormalClass *>&& deferred) { \
         deferred.setResult(instancePtr); \
       }, context::New()).then([=](NormalClass *returned) { \
         if (instancePtr == returned && NormalClass::validate(*returned)) \
@@ -916,7 +916,7 @@ namespace DataValidate {
     /* ==> */ \
     .it(#tag"should fulfill raw pointer correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
       NormalClass *instancePtr = new NormalClass; \
-      Promise2::Promise<NormalClass *>::New([=]() { \
+      WrappedOnRejectPromise<NormalClass *>::New([=]() { \
         return Promise2::Promise<NormalClass *>::Resolved(instancePtr); \
       }, context::New()).then([=](NormalClass *returned) { \
          if (instancePtr == returned && NormalClass::validate(*returned)) \
