@@ -877,6 +877,57 @@ namespace DataValidate {
       }, [=](std::exception_ptr) { \
         notifier->fail(std::make_exception_ptr(AssertionFailed())); \
       }, context::New()); \
+    }) \
+    .it(#tag"should fulfill raw pointer correctly", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      NormalClass *instancePtr = new NormalClass; \
+      Promise2::Promise<NormalClass *>::New([=] { \
+        return instancePtr; \
+      }, context::New()).then([=](NormalClass *returned) { \
+        if (instancePtr == returned && NormalClass::validate(*returned)) \
+          notifier->done(); \
+        else \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        /* clean data */ \
+        delete instancePtr; \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        /* clean data */ \
+        delete instancePtr; \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill raw pointer correctly from deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      NormalClass *instancePtr = new NormalClass; \
+      Promise2::Promise<NormalClass *>::New([=](Promise2::PromiseDefer<NormalClass *>&& deferred) { \
+        deferred.setResult(instancePtr); \
+      }, context::New()).then([=](NormalClass *returned) { \
+        if (instancePtr == returned && NormalClass::validate(*returned)) \
+          notifier->done(); \
+        else \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        /* clean data */ \
+        delete instancePtr; \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        /* clean data */ \
+        delete instancePtr; \
+      }, context::New()); \
+    }) \
+    /* ==> */ \
+    .it(#tag"should fulfill raw pointer correctly from nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) { \
+      NormalClass *instancePtr = new NormalClass; \
+      Promise2::Promise<NormalClass *>::New([=]() { \
+        return Promise2::Promise<NormalClass *>::Resolved(instancePtr); \
+      }, context::New()).then([=](NormalClass *returned) { \
+         if (instancePtr == returned && NormalClass::validate(*returned)) \
+           notifier->done(); \
+         else \
+          notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+         /* clean data */ \
+         delete instancePtr; \
+      }, [=](std::exception_ptr) { \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+      }, context::New()); \
     });
 
   template<typename T>
@@ -886,8 +937,6 @@ namespace DataValidate {
 #ifdef __APPLE__
     DATATEST_INIT(MainThreadContext, GCDThreadContext:)
 #endif // __APPLE__
-    // raw pointer
-    // single numbers
     // string
     // shared_ptr
   }
