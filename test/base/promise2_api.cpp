@@ -942,9 +942,127 @@ namespace DataValidate {
   }
 }
 
+namespace OnRejectReturn {
+  template<typename T>
+  void init(T& spec) {
+    using context = CurrentContext;
+
+    spec
+    /* ==> */ 
+    .it("should catch the exception thrown from `onReject`", [](const LTest::SharedCaseEndNotifier& notifier){
+      constexpr bool truth = true;
+
+      Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool) {
+        throw AssertionFailed();
+      }, [=](std::exception_ptr e) {
+        return Promise2::Promise<void>::Rejected(e);
+      }, context::New()).then([=] {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr e) {
+        try {
+          std::rethrow_exception(e);      
+        } catch(const UserException&) {
+          notifier->done();
+        } catch(...) {
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        }
+        return Promise2::Promise<void>::Resolved();
+      }, context::New());
+    })
+    /* ==> */
+    .it("should convey `onReject` returned value downstream via normal promise", [](const LTest::SharedCaseEndNotifier& notifier) {
+      constexpr bool truth = true;
+
+      Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool) {
+        return !truth;
+      }, [=](std::exception_ptr e) {
+        
+        try {
+           std::rethrow_exception(e);
+        } catch(const UserException&) {
+          // ignore the exception
+          return Promise2::Promise<bool>::New([=] {
+            return truth;
+          }, context::New());
+        } catch(...) {
+          return Promise2::Promise<bool>::Rejected(std::current_exception());
+        }
+      }, context::New()).then([=](bool fulfilled) {
+        if (truth != fulfilled) {
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+          return;
+        } 
+        notifier->done();
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Promise2::Promise<void>::Resolved();
+      }, context::New());
+    })
+    /* ==> */
+    .it("should convey `onReject` returned value downstream via deferred promise", [](const LTest::SharedCaseEndNotifier& notifier) {
+      constexpr bool truth = true;
+
+      Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool) {
+        return !truth;
+      }, [=](std::exception_ptr e) {
+        
+        try {
+           std::rethrow_exception(e);
+        } catch(const UserException&) {
+          // ignore the exception
+          return Promise2::Promise<bool>::New([=](Promise2::PromiseDefer<bool>&& deferred) {
+            deferred.setResult(truth);
+          }, context::New());
+        } catch(...) {
+          return Promise2::Promise<bool>::Rejected(std::current_exception());
+        }
+      }, context::New()).then([=](bool fulfilled) {
+        if (truth != fulfilled) {
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+          return;
+        } 
+        notifier->done();
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Promise2::Promise<void>::Resolved();
+      }, context::New());
+    })
+    /* ==> */
+    .it("should convey `onReject` returned value downstream via nesting promise", [](const LTest::SharedCaseEndNotifier& notifier) {
+      constexpr bool truth = true;
+
+      Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool) {
+        return !truth;
+      }, [=](std::exception_ptr e) {
+        
+        try {
+           std::rethrow_exception(e);
+        } catch(const UserException&) {
+          // ignore the exception
+          return Promise2::Promise<bool>::New([=]() { 
+            return Promise2::Promise<bool>::Resolved(truth);
+          }, context::New());
+        } catch(...) {
+          return Promise2::Promise<bool>::Rejected(std::current_exception());
+        }
+      }, context::New()).then([=](bool fulfilled) {
+        if (truth != fulfilled) {
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+          return;
+        } 
+        notifier->done();
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Promise2::Promise<void>::Resolved();
+      }, context::New());
+    });
+  }
+}
+
 TEST_ENTRY(CONTAINER_TYPE,
    SPEC_TFN(SpecFixedValue::init),
    SPEC_TFN(PromiseAPIsBase::init),
-   SPEC_TFN(DataValidate::init))
+   SPEC_TFN(DataValidate::init),
+   SPEC_TFN(OnRejectReturn::init));
 
 #endif // PROMISE2_API_CPP
