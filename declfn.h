@@ -36,9 +36,23 @@ namespace Promise2 {
     
     template<typename Return, typename... Args>
     struct function_trait<Return(Args...) volatile> : public function_trait<Return(Args...)> {};
-    
+
     template<typename T>
     using function_trait_t = typename function_trait<T>::type;
+
+#if __OBJC__
+    // objc c++ mixing mode
+    template<typename T>
+    struct block_trait;
+
+    template<typename Return, typename... Arg>
+    struct block_trait<Return(__strong ^)(Arg...)> {
+      using type = std::function<Return(Arg...)>;
+    };
+
+    template<typename T>
+    using block_trait_t = typename block_trait<T>::type;
+#endif // __OBJC__
   } // Traits
 
   struct callable_trait {
@@ -54,6 +68,11 @@ namespace Promise2 {
 
     template<typename BindExpr>
     static std::enable_if_t<std::is_bind_expression<BindExpr>::value, BindExpr> INVOKE(const BindExpr& bindExpr, std::false_type isFunction);
+
+#if __OBJC__
+    template<typename Callable>
+    static auto INVOKE(Callable&& callable, std::false_type isFunction) -> Traits::block_trait_t<std::decay_t<Callable>>;
+#endif // __OBJC__
 
     static auto INVOKE(...) -> std::false_type;
   };
