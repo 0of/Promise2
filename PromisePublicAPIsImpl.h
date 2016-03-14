@@ -147,7 +147,7 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<T>::Then(SharedPromiseNode<T>& node, 
                              std::function<Promise<NextT>(T)>&& onFulfill,
-                             OnRejectFunction&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `NESTING_PROMISE` in `PromiseConfig.h`");
   }
@@ -155,7 +155,7 @@ namespace Promise2 {
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node, 
                              std::function<Promise<NextT>(void)>&& onFulfill,
-                             OnRejectFunction&& onReject, 
+                             OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `NESTING_PROMISE` in `PromiseConfig.h`");
   }

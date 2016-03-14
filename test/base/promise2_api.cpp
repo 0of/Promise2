@@ -950,8 +950,6 @@ namespace OnRejectReturn {
     spec
     /* ==> */ 
     .it("should catch the exception thrown from `onReject`", [](const LTest::SharedCaseEndNotifier& notifier){
-      constexpr bool truth = true;
-
       Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())).then([=](bool) {
         throw AssertionFailed();
       }, [=](std::exception_ptr e) {
