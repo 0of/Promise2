@@ -27,6 +27,6 @@ set(EXECUTABLE_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 add_subdirectory(base/promise2_api)
 
-if(APPLE)
+if(UNIX)
 add_subdirectory(base/ocpp_mixing)
 endif()

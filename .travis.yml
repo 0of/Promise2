@@ -13,6 +13,10 @@ addons:
      - g++-5
      - clang-3.8
      - cmake
+     - libobjc-5-dev
+     - gobjc++-5
+     - gnustep-devel
+     - libdispatch-dev
 
 before_install:
   # pwd ~> HOME/test
