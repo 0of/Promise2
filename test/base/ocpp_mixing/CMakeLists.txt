@@ -1,29 +1,18 @@
-find_package(Threads REQUIRED)
-
-file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/*.mm")
-add_executable(ocpp_mixing ${tests})
-
 if(APPLE)
+  file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/*.mm")
+  add_executable(ocpp_mixing ${tests})
+
   target_link_libraries(ocpp_mixing
     "-framework Cocoa"
     "-framework AppKit"
     "-framework CoreData"
     "-framework Foundation"
   )
-else()
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    execute_process(COMMAND locate "objc.h"
-                            OUTPUT_VARIABLE objc_locate 
-                            OUTPUT_STRIP_TRAILING_WHITESPACE)
-    message(${objc_locate})
+elseif(not "${CMAKE_CXX_COMPILER_ID}" strequal "Clang")
+  find_package(Threads REQUIRED)
 
-    execute_process(COMMAND "dirname" ${objc_locate}
-                            OUTPUT_VARIABLE objc_dir
-                            OUTPUT_STRIP_TRAILING_WHITESPACE)
-    message(${objc_dir})
-
-    include_directories(${objc_dir})
-  endif()
+  file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/*.mm")
+  add_executable(ocpp_mixing ${tests})
 
   execute_process(COMMAND gnustep-config "--variable=GNUSTEP_SYSTEM_HEADERS"
                                   OUTPUT_VARIABLE gnustep_includes 
