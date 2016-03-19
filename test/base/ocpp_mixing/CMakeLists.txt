@@ -11,6 +11,20 @@ if(APPLE)
     "-framework Foundation"
   )
 else()
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    execute_process(COMMAND locate "objc.h"
+                            OUTPUT_VARIABLE objc_locate 
+                            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    message(${objc_locate})
+
+    execute_process(COMMAND "dirname" ${objc_locate}
+                            OUTPUT_VARIABLE objc_dir
+                            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    message(${objc_dir})
+
+    include_directories(${objc_dir})
+  endif()
+
   execute_process(COMMAND gnustep-config "--variable=GNUSTEP_SYSTEM_HEADERS"
                                   OUTPUT_VARIABLE gnustep_includes 
                                   OUTPUT_STRIP_TRAILING_WHITESPACE)
