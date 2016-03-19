@@ -24,6 +24,15 @@ else()
   				  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
   set(CMAKE_CXX_FLAGS ${flags})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fblocks -fobjc-arc")
+
   include_directories(${gnustep_includes})
   link_directories(${gnustep_libs})
+
+  target_link_libraries(ocpp_mixing
+    ${CMAKE_THREAD_LIBS_INIT}
+    dispatch
+    objc
+    gnustep-base
+  )
 endif()
