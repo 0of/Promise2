@@ -8,7 +8,7 @@ if(APPLE)
     "-framework CoreData"
     "-framework Foundation"
   )
-elseif(not "${CMAKE_CXX_COMPILER_ID}" strequal "Clang")
+elseif(NOT ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   find_package(Threads REQUIRED)
 
   file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/*.mm")
