@@ -3,8 +3,6 @@ find_package(Threads REQUIRED)
 file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/*.mm")
 add_executable(ocpp_mixing ${tests})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fblocks -fobjc-arc")
-
 if(APPLE)
   target_link_libraries(ocpp_mixing
     "-framework Cocoa"
