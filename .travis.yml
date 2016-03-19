@@ -30,6 +30,6 @@ install:
   - make all
 
 script:
-  - sh ./run_test.sh
+  - make run_test
 
 
