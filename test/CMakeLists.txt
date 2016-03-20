@@ -49,6 +49,11 @@ if(${COVERAGE_REPORT})
   set(coverage_file "coverage.info")
 
   add_custom_command(TARGET run_test 
+  					BEFORE_BUILD
+  					COMMAND lcov --directory . --zerocounters
+  					COMMAND "-- zerocounters...")
+
+  add_custom_command(TARGET run_test 
   					POST_BUILD
   					COMMAND lcov --directory . --capture --output-file ${coverage_file}
   					COMMENT "-- collect coverage files...")
