@@ -48,7 +48,7 @@ if(${COVERAGE_REPORT})
   set(coverage_file "coverage.info")
 
   add_custom_command(TARGET run_test 
-  					BEFORE_BUILD
+  					PRE_BUILD
   					COMMAND lcov --directory . --zerocounters
   					COMMAND "-- zerocounters...")
 
