@@ -11,6 +11,6 @@ dependencies:
 
 test:
   override:
-  	- cmake .
-  	- make all
-  	- make run_test
+    - cmake .
+    - make all
+    - make run_test
