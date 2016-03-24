@@ -3,7 +3,7 @@ general:
 
 machine:
   pre:
-    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 20
+    - sudo apt-get install g++-5
     - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 20
 
 test:
