@@ -1,5 +1,9 @@
 language: cpp
 
+os:
+  - linux
+  - osx
+
 compiler:
   - clang
   - gcc
@@ -20,6 +24,8 @@ addons:
      - libdispatch-dev
 
 before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install cmake lcov; fi
   - gem install coveralls-lcov
   # pwd ~> HOME/test
   - cd ./test
