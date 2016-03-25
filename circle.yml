@@ -3,11 +3,13 @@ general:
 
 machine:
   pre:
-    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 20
-    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 20
+    - gem install coveralls-lcov
+    - sudo apt-get install gcc-5 g++-5 libobjc2 gobjc++-5 gnustep-devel libdispatch-dev lcov
+    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 50
 
 test:
   override:
+    - c++ --version
     - cmake .
     - make all
     - make run_test
