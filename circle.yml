@@ -3,11 +3,12 @@ general:
 
 machine:
   pre:
-    - sudo apt-get install g++-5
-    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 20
+    - sudo apt-get install gcc-5 g++-5 libobjc2 gobjc++-5 gnustep-devel libdispatch-dev lcov
+    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 50
 
 test:
   override:
+    - c++ --version
     - cmake .
     - make all
     - make run_test
