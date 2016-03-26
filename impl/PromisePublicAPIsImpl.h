@@ -1,7 +1,7 @@
 #ifndef PROMISE_PUBLIC_AP_ISIMPL_H
 #define PROMISE_PUBLIC_AP_ISIMPL_H
 
-#include "PromisePublicAPIs.h"
+#include "../public/PromisePublicAPIs.h"
 #include "PromiseInternalsBase.h"
 
 #if DEFERRED_PROMISE

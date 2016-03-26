@@ -11,7 +11,7 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include <Windows.h>
 
-#include "PromisePublicAPIs.h"
+#include "../public/PromisePublicAPIs.h"
 
 namespace ThreadContextImpl {
   namespace Windows {

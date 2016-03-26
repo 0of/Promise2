@@ -9,7 +9,7 @@
 #ifndef PROMISE_H
 #define PROMISE_H
 
-#include "PromisePublicAPIs.h"
-#include "PromisePublicAPIsImpl.h"
+#include "impl/PromisePublicAPIs.h"
+#include "public/PromisePublicAPIsImpl.h"
 
 #endif // PROMISE_H

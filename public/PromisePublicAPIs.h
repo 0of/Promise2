@@ -14,8 +14,8 @@
 #include <exception>
 #include <stdexcept>
  
-#include "PromiseConfig.h"
-#include "declfn.h"
+#include "../PromiseConfig.h"
+#include "../trait/declfn.h"
 
 namespace Promise2 {
   // declarations

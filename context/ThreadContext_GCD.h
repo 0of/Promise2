@@ -8,13 +8,13 @@
 #ifndef THREAD_CONTEXT_GCD_H
 #define THREAD_CONTEXT_GCD_H
 
-#include "PromiseConfig.h"
+#include "../PromiseConfig.h"
 
 #if USE_DISPATCH
 
 #include <dispatch/dispatch.h>
 
-#include "PromisePublicAPIs.h"
+#include "../public/PromisePublicAPIs.h"
 
 typedef struct dispatch_queue_s *dispatch_queue_t; 
 
