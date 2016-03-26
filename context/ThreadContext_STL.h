@@ -10,7 +10,7 @@
 
 #include <thread>
 
-#include "PromisePublicAPIs.h"
+#include "../public/PromisePublicAPIs.h"
 
 namespace ThreadContextImpl {
   namespace STL {
