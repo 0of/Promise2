@@ -26,7 +26,7 @@
  */
 #include "Promise.h"
 #include "entry.h"
-#include "ThreadContext_STL.h"
+#include "context/ThreadContext_STL.h"
 
 class CurrentContext : public Promise2::ThreadContext {
 public:
@@ -93,7 +93,7 @@ protected:
 };
 # define CONTAINER_TYPE GCDContainer
 
-#include "ThreadContext_GCD.h"
+#include "context/ThreadContext_GCD.h"
 using MainThreadContext = ThreadContextImpl::GCD::MainThreadContext;
 
 #else
