@@ -10,6 +10,43 @@ c++14 compliant cross-platform implementations of promise
 - simple API definitions and quite easy to use
 - great extensibility and platform customized message deliver delegate
 - lightweight
+- all written in header files and easy to integrate
+
+# Installation
+### cmake
+add the following code to your `CMakeLists.txt` file
+
+_you may need to do some modifications for checking out specific release version_
+
+```cmake
+include(ExternalProject)
+find_package(Git REQUIRED)
+
+# checkout the source code from github
+ExternalProject_Add(
+    Promise2
+    PREFIX "deps/root/path"
+    GIT_REPOSITORY https://github.com/0of/Promise2.git
+    TIMEOUT 10
+    UPDATE_COMMAND ${GIT_EXECUTABLE} pull
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    LOG_DOWNLOAD ON
+)
+
+# include the promise path
+ExternalProject_Get_Property(Promise2 source_dir)
+include_directories(${source_dir})
+
+# c++14
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+```
+
+### Compilers support
+- GCC 5
+- Clang 3.8
+- VS2015
 
 # Usage Guidelines
 ## Create a new promise
