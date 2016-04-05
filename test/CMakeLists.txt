@@ -6,9 +6,9 @@ include(ExternalProject)
 find_package(Git REQUIRED)
 
 ExternalProject_Add(
-    LTest
+    fido
     PREFIX ${CMAKE_BINARY_DIR}/deps
-    GIT_REPOSITORY https://github.com/0of/LTest.git
+    GIT_REPOSITORY https://github.com/0of/fido.git
     TIMEOUT 10
     UPDATE_COMMAND ${GIT_EXECUTABLE} pull
     CONFIGURE_COMMAND ""
@@ -17,7 +17,7 @@ ExternalProject_Add(
     LOG_DOWNLOAD ON
 )
 
-ExternalProject_Get_Property(LTest source_dir)
+ExternalProject_Get_Property(fido source_dir)
 include_directories(${source_dir})
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/base/")
