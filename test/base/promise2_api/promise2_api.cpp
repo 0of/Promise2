@@ -184,7 +184,7 @@ public:
     auto wrappedOnRejected = DoWrapOnReject<typename declfn(onReject)::result_type>::wrap(std::move(onReject));
     auto promise = Promise2::Promise<T>::then(std::move(onFulfill), std::move(wrappedOnRejected), std::move(context));
 
-      return WrappedOnRejectPromise<typename decltype(promise)::PromiseType>{ promise };
+    return WrappedOnRejectPromise<typename decltype(promise)::PromiseType>{ promise };
   }
 };
 
@@ -289,7 +289,7 @@ namespace SpecFixedValue {
       WrappedOnRejectPromise<bool>::New([]{ \
         return Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException())); \
       }, context::New()).then([=](bool fulfilled){ \
-       notifier->fail(std::make_exception_ptr(AssertionFailed())); \
+        notifier->fail(std::make_exception_ptr(AssertionFailed())); \
       }, std::bind(passUserException, notifier, std::placeholders::_1), context::New()); \
     }) \
     \
