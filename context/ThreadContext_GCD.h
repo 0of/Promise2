@@ -16,8 +16,6 @@
 
 #include "../public/PromisePublicAPIs.h"
 
-typedef struct dispatch_queue_s *dispatch_queue_t; 
-
 namespace ThreadContextImpl {
   namespace GCD {
     namespace Details {

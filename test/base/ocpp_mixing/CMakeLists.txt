@@ -26,7 +26,7 @@ elseif(NOT ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   				  OUTPUT_VARIABLE flags 
   				  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  set(CMAKE_CXX_FLAGS ${flags})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
 
   include_directories(${gnustep_includes})
   link_directories(${gnustep_libs})
