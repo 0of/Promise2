@@ -18,10 +18,10 @@ addons:
      - clang-3.8
      - cmake
      - lcov
-     - libobjc2
-     - gobjc++-5
      - gnustep-devel
      - libdispatch-dev
+     - libobjc2
+     - gobjc++-5
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
