@@ -20,10 +20,10 @@ addons:
      - lcov
      - gnustep-devel
      - libdispatch-dev
-     - libobjc2
      - gobjc++-5
 
 before_install:
+  - if [[ "$TRAVIS_OS_NAME" != "osx" ]]; then apt-get install libobjc2; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install --with-clang llvm38; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install lcov; fi
