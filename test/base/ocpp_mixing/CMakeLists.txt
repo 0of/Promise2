@@ -13,6 +13,18 @@ if(APPLE)
 elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   find_package(Threads REQUIRED)
 
+  ExternalProject_Add(
+    libobjc2
+    PREFIX ${CMAKE_BINARY_DIR}/deps
+    GIT_REPOSITORY https://github.com/gnustep/libobjc2.git
+    TIMEOUT 10
+    UPDATE_COMMAND ${GIT_EXECUTABLE} pull
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND "sudo cmake install"
+    LOG_DOWNLOAD ON
+  )
+
   file(GLOB tests "${CMAKE_CURRENT_SOURCE_DIR}/*.mm")
   add_executable(ocpp_mixing ${tests})
 
@@ -28,7 +40,7 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   				  OUTPUT_VARIABLE flags 
   				  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} -fblocks -fobjc-arc")
 
   include_directories(${gnustep_includes})
   link_directories(${gnustep_libs})
