@@ -21,7 +21,7 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
     UPDATE_COMMAND ${GIT_EXECUTABLE} pull
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
-    INSTALL_COMMAND "sudo cmake install"
+    INSTALL_COMMAND "sudo cmake . && make install"
     LOG_DOWNLOAD ON
   )
 
