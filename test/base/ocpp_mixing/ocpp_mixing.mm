@@ -68,7 +68,8 @@ template<typename T>
 void init(T& spec) {
 	spec 
   /* ==> */ 
-  .it("should acquire the fulfilled value", [](const LTest::SharedCaseEndNotifier& notifier){ 
+  .it("should acquire the fulfilled value", [](const LTest::SharedCaseEndNotifier& n){ 
+  	__block auto notifier = n;
     Promise2::Promise<BOOL>::Resolved(YES).then(^(BOOL fulfilled) { 
       if (YES != fulfilled) { 
         notifier->fail(std::make_exception_ptr(AssertionFailed())); 
