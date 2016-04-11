@@ -19,7 +19,7 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
     GIT_REPOSITORY https://github.com/gnustep/libobjc2.git
     TIMEOUT 10
     UPDATE_COMMAND ${GIT_EXECUTABLE} pull
-    CMAKE_ARGS -DBUILD_STEP=install
+    CMAKE_ARGS -DBUILD_STEP=install -DUSE_SUPERBUILD=ON
     LOG_DOWNLOAD ON
   )
 
