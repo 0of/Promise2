@@ -46,7 +46,7 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   target_link_libraries(ocpp_mixing
     ${CMAKE_THREAD_LIBS_INIT}
     dispatch
-    objc
+    objcxx
     gnustep-base
   )
 endif()
