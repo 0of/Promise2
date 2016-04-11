@@ -38,7 +38,7 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   				  OUTPUT_VARIABLE flags 
   				  OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flags} -fblocks -fobjc-arc")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fblocks -fobjc-arc")
 
   include_directories(${gnustep_includes})
   link_directories(${gnustep_libs})
