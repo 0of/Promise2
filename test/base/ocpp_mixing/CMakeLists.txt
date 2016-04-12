@@ -33,16 +33,25 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
                   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
   if(install_type)
-    execute_process(COMMAND gnustep-config "--variable=GNUSTEP_${install_type}_HEADERS"
+    # install_type may be equals to `SYSTEM`
+    execute_process(COMMAND gnustep-config "--variable=GNUSTEP_SYSTEM_HEADERS"
                     OUTPUT_VARIABLE gnustep_includes 
                     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-    execute_process(COMMAND gnustep-config "--variable=GNUSTEP_${install_type}_LIBRARIES"
+    execute_process(COMMAND gnustep-config "--variable=GNUSTEP_SYSTEM_LIBRARIES"
                     OUTPUT_VARIABLE gnustep_libs 
                     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-    include_directories(${gnustep_includes})
-    link_directories(${gnustep_libs})
+    execute_process(COMMAND gnustep-config "--variable=GNUSTEP_${install_type}_HEADERS"
+                    OUTPUT_VARIABLE install_gnustep_includes 
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    execute_process(COMMAND gnustep-config "--variable=GNUSTEP_${install_type}_LIBRARIES"
+                    OUTPUT_VARIABLE install_gnustep_libs 
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    include_directories(${gnustep_includes} ${install_gnustep_includes})
+    link_directories(${gnustep_libs} ${install_gnustep_libs})
   else()
     execute_process(COMMAND gnustep-config "--variable=GNUSTEP_SYSTEM_HEADERS"
                     OUTPUT_VARIABLE gnustep_includes 
