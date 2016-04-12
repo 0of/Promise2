@@ -13,13 +13,15 @@ if(APPLE)
 elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
   find_package(Threads REQUIRED)
 
+  set(objc2 "${CMAKE_BINARY_DIR}/deps/objc2")
+
   ExternalProject_Add(
     libobjc2
     PREFIX ${CMAKE_BINARY_DIR}/deps
     GIT_REPOSITORY https://github.com/gnustep/libobjc2.git
     TIMEOUT 10
     UPDATE_COMMAND ${GIT_EXECUTABLE} pull
-    CMAKE_ARGS -DBUILD_STEP=install -DUSE_SUPERBUILD=ON
+    CMAKE_ARGS -DBUILD_STEP=install -DCMAKE_INSTALL_PREFIX=${objc2}
     LOG_DOWNLOAD ON
   )
 
@@ -40,8 +42,8 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
 
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fnext-runtime -fblocks -fobjc-arc")
 
-  include_directories(${gnustep_includes})
-  link_directories(${gnustep_libs})
+  include_directories(${gnustep_includes} ${objc2}/include)
+  link_directories(${gnustep_libs} ${objc2}/lib)
 
   target_link_libraries(ocpp_mixing
     ${CMAKE_THREAD_LIBS_INIT}
