@@ -65,7 +65,11 @@ elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
     link_directories(${gnustep_libs} ${default_objc2}/lib)
   endif()
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fnext-runtime -fblocks -fobjc-arc")
+  execute_process(COMMAND gnustep-config "--objc-flags"
+                    OUTPUT_VARIABLE gnustep_flags
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${gnustep_flags} -fnext-runtime -fblocks -fobjc-arc")
 
   target_link_libraries(ocpp_mixing
     ${CMAKE_THREAD_LIBS_INIT}
