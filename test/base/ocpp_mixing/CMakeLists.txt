@@ -10,7 +10,7 @@ if(APPLE)
   )
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fobjc-arc")
 
-elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND ENABLE_GNUSTEP)
   find_package(Threads REQUIRED)
 
   set(default_objc2 "${CMAKE_BINARY_DIR}/deps/objc2")
