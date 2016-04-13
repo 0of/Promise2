@@ -67,7 +67,7 @@ namespace Promise2 {
           ArgType preValue;
 
           try {
-            preValue = Base::get();
+            Base::guard();
           } catch (...) {
             Base::runReject();
             return;
@@ -75,7 +75,7 @@ namespace Promise2 {
 
           PromiseDefer<ReturnType> deferred{ Base::_forward };
           // no exception allowed
-          _onFulfill(std::move(deferred), preValue);
+          _onFulfill(std::move(deferred), std::forward<ArgType>(Base::_previousPromise->value));
         });
       }
     };
@@ -99,7 +99,7 @@ namespace Promise2 {
       virtual void run() noexcept override {
         std::call_once(Base::_called, [this]() {
           try {
-            Base::get();
+            Base::guard();
           } catch (...) {
             Base::runReject();
             return;

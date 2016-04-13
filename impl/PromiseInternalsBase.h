@@ -147,79 +147,19 @@ namespace Promise2 {
     //
     template<typename T> using SharedPromiseValue = std::shared_ptr<PromiseValue<T>>;
 
-
-    template<typename FulfillArgType, typename IsTask>
-    class FulfillGet {
-    protected:
-      SharedPromiseValue<FulfillArgType> _previousPromise;
-
-    public:
-      bool isAttached() const {
-        return !!_previousPromise;
-      }
-
-    protected:
-      FulfillArgType get() {
-        if (!isAttached()) {
-          throw std::logic_error("invalid promise state");
-        }
-
-        _previousPromise->accessGuard();
-        return _previousPromise->value;
-      }
-
-      void assign(const SharedPromiseValue<FulfillArgType>& v) {
-        _previousPromise = v;
-      }
-    };
-
-    template<typename IsTask>
-    class FulfillGet<void, IsTask> {
-    protected:
-      SharedPromiseValue<void> _previousPromise;
-
-    public:
-      bool isAttached() const {
-        return !!_previousPromise;
-      }
-
-    protected:
-      void get() {
-        if (!isAttached()) {
-          throw std::logic_error("invalid promise state");
-        }
-
-        _previousPromise->accessGuard();
-      }
-
-      void assign(const SharedPromiseValue<void>& v) {
-        _previousPromise = v;
-      }
-    };
-
-    template<>
-    class FulfillGet<void, std::true_type> {
-    public:
-      bool isAttached() const {
-        return true;
-      }
-
-    protected:
-      void get() {}
-      void assign(const SharedPromiseValue<void>&) {}
-    };
-
     //
     // fulfill traits
     //
     template<typename FulfillArgType, typename IsTask>
-    class Fulfill : public FulfillGet<FulfillArgType, IsTask> {
+    class Fulfill {
+    protected:
+      SharedPromiseValue<FulfillArgType> _previousPromise;
     private:
       std::atomic_flag _attachGuard;
 
     protected:
       Fulfill()
-        : FulfillGet<FulfillArgType, IsTask>()
+        : _previousPromise{}
         , _attachGuard{ ATOMIC_FLAG_INIT }
       {}
 
@@ -227,14 +167,43 @@ namespace Promise2 {
       virtual ~Fulfill() = default;
 
     public:
+      // 
+      // `attach` & `guard` will never be called in concurrency
+      // `attach` may be falsely invoked multi-times in mutli-thread environment
+      //
       void attach(const SharedPromiseValue<FulfillArgType>& previousPromise) {
         if (_attachGuard.test_and_set()) {
           // already attached or is attaching
           throw std::logic_error("promise duplicated attachments");
         }
 
-        FulfillGet<FulfillArgType, IsTask>::assign(previousPromise);
+        _previousPromise = previousPromise;
       }
+
+      void guard() {
+        if (!_previousPromise) {
+          throw std::logic_error("null promise value");
+        }
+
+        _previousPromise->accessGuard();
+      }
+    };
+
+    template<>
+    class Fulfill<void, std::true_type> {
+    protected:
+      Fulfill()
+      {}
+
+    public:
+      virtual ~Fulfill() = default;
+
+    public:
+      void attach(const SharedPromiseValue<void>& previousPromise) {
+        throw std::logic_error("task cannot be chained");
+      }
+
+      void guard() {}
     };
 
     template<typename ForwardType>
@@ -508,17 +477,15 @@ namespace Promise2 {
     public:
       virtual void run() override {
         std::call_once(Base::_called, [this]() {
-          ArgType preValue;
-
           try {
-            preValue = Base::get();
+            Base::guard();
           } catch (...) {
             Base::runReject();
             return;
           }
 
           try {
-            runFulfill(preValue);
+            runFulfill(std::forward<ArgType>(Base::_previousPromise->value));
           } catch (...) {
             // previous task is failed
             Base::runReject();
@@ -557,7 +524,7 @@ namespace Promise2 {
       virtual void run() override {
         std::call_once(Base::_called, [this]() {
           try {
-            Base::get();
+            Base::guard();
           } catch (...) {
             Base::runReject();
             return;

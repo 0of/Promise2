@@ -34,7 +34,8 @@ namespace Promise2 {
           Promise<ReturnType> wrapped;
 
           try {
-            wrapped = std::move(_onFulfill(std::forward<ReturnType>(Base::PreviousRetrievable::get())));
+            Base::guard();
+            wrapped = std::move(_onFulfill(std::forward<ReturnType>(Base::_previousPromise->value)));
           } catch (...) {
             wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));
           }
@@ -65,7 +66,7 @@ namespace Promise2 {
           Promise<ReturnType> wrapped;
 
           try {
-            Base::get();
+            Base::guard();
             wrapped = std::move(_onFulfill());
           } catch (...) {
             wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));
