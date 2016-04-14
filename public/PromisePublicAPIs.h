@@ -116,21 +116,21 @@ namespace Promise2 {
   template<typename T>
   class PromiseThenable {
   public:
-    template<typename NextT>
+    template<typename NextT, typename ConvertibleT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node,
-                               std::function<NextT(T)>&& onFulfill, 
+                               std::function<NextT(ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
-    template<typename NextT>
+    template<typename NextT, typename ConvertibleT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node,
-                               std::function<void(PromiseDefer<NextT>&&, T)>&& onFulfill, 
+                               std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
-    template<typename NextT>
+    template<typename NextT, typename ConvertibleT>
     static Promise<NextT> Then(SharedPromiseNode<T>& node, 
-                               std::function<Promise<NextT>(T)>&& onFulfill,
+                               std::function<Promise<NextT>(ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 

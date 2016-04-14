@@ -147,79 +147,19 @@ namespace Promise2 {
     //
     template<typename T> using SharedPromiseValue = std::shared_ptr<PromiseValue<T>>;
 
-
-    template<typename FulfillArgType, typename IsTask>
-    class FulfillGet {
-    protected:
-      SharedPromiseValue<FulfillArgType> _previousPromise;
-
-    public:
-      bool isAttached() const {
-        return !!_previousPromise;
-      }
-
-    protected:
-      FulfillArgType get() {
-        if (!isAttached()) {
-          throw std::logic_error("invalid promise state");
-        }
-
-        _previousPromise->accessGuard();
-        return _previousPromise->value;
-      }
-
-      void assign(const SharedPromiseValue<FulfillArgType>& v) {
-        _previousPromise = v;
-      }
-    };
-
-    template<typename IsTask>
-    class FulfillGet<void, IsTask> {
-    protected:
-      SharedPromiseValue<void> _previousPromise;
-
-    public:
-      bool isAttached() const {
-        return !!_previousPromise;
-      }
-
-    protected:
-      void get() {
-        if (!isAttached()) {
-          throw std::logic_error("invalid promise state");
-        }
-
-        _previousPromise->accessGuard();
-      }
-
-      void assign(const SharedPromiseValue<void>& v) {
-        _previousPromise = v;
-      }
-    };
-
-    template<>
-    class FulfillGet<void, std::true_type> {
-    public:
-      bool isAttached() const {
-        return true;
-      }
-
-    protected:
-      void get() {}
-      void assign(const SharedPromiseValue<void>&) {}
-    };
-
     //
     // fulfill traits
     //
     template<typename FulfillArgType, typename IsTask>
-    class Fulfill : public FulfillGet<FulfillArgType, IsTask> {
+    class Fulfill {
+    protected:
+      SharedPromiseValue<FulfillArgType> _previousPromise;
     private:
       std::atomic_flag _attachGuard;
 
     protected:
       Fulfill()
-        : FulfillGet<FulfillArgType, IsTask>()
+        : _previousPromise{}
         , _attachGuard{ ATOMIC_FLAG_INIT }
       {}
 
@@ -227,14 +167,43 @@ namespace Promise2 {
       virtual ~Fulfill() = default;
 
     public:
+      // 
+      // `attach` & `guard` will never be called in concurrency
+      // `attach` may be falsely invoked multi-times in mutli-thread environment
+      //
       void attach(const SharedPromiseValue<FulfillArgType>& previousPromise) {
         if (_attachGuard.test_and_set()) {
           // already attached or is attaching
           throw std::logic_error("promise duplicated attachments");
         }
 
-        FulfillGet<FulfillArgType, IsTask>::assign(previousPromise);
+        _previousPromise = previousPromise;
       }
+
+      void guard() {
+        if (!_previousPromise) {
+          throw std::logic_error("null promise value");
+        }
+
+        _previousPromise->accessGuard();
+      }
+    };
+
+    template<>
+    class Fulfill<void, std::true_type> {
+    protected:
+      Fulfill()
+      {}
+
+    public:
+      virtual ~Fulfill() = default;
+
+    public:
+      void attach(const SharedPromiseValue<void>& previousPromise) {
+        throw std::logic_error("task cannot be chained");
+      }
+
+      void guard() {}
     };
 
     template<typename ForwardType>
@@ -490,15 +459,15 @@ namespace Promise2 {
     //
     // Promise node
     //
-    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
     class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
     private:
-      std::function<ReturnType(ArgType)> _onFulfill;
+      std::function<ReturnType(ConvertibleArgType)> _onFulfill;
 
     public:
-      PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
+      PromiseNodeInternal(std::function<ReturnType(ConvertibleArgType)>&& onFulfill,
                   OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
@@ -508,38 +477,25 @@ namespace Promise2 {
     public:
       virtual void run() override {
         std::call_once(Base::_called, [this]() {
-          ArgType preValue;
-
           try {
-            preValue = Base::get();
+            Base::guard();
           } catch (...) {
             Base::runReject();
             return;
           }
 
           try {
-            runFulfill(preValue);
+            RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, std::forward<ConvertibleArgType>(Base::_previousPromise->value));
           } catch (...) {
             // previous task is failed
             Base::runReject();
           }
         });
       }
-
-    protected:
-      template<typename T>
-      void runFulfill(T&& preFulfilled) noexcept {
-        // warpped the exception
-        try {
-          RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, std::forward<T>(preFulfilled));
-        } catch (...) {
-          Base::runReject();
-        }
-      }
     }; 
 
     template<typename ReturnType, typename IsTask>
-    class PromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+    class PromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
       using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:
@@ -557,29 +513,19 @@ namespace Promise2 {
       virtual void run() override {
         std::call_once(Base::_called, [this]() {
           try {
-            Base::get();
+            Base::guard();
           } catch (...) {
             Base::runReject();
             return;
           }
 
           try {
-            runFulfill();
+            RunVoidFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill);
           } catch (...) {
             // previous task is failed
             Base::runReject();
           }
         });
-      }
-
-    protected:
-      void runFulfill() noexcept {
-        // warpped the exception
-        try {
-          RunVoidFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill);
-        } catch (...) {
-          Base::runReject();
-        }
       }
     }; 
   // end of details
