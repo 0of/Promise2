@@ -459,15 +459,15 @@ namespace Promise2 {
     //
     // Promise node
     //
-    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
     class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
     private:
-      std::function<ReturnType(ArgType)> _onFulfill;
+      std::function<ReturnType(ConvertibleArgType)> _onFulfill;
 
     public:
-      PromiseNodeInternal(std::function<ReturnType(ArgType)>&& onFulfill, 
+      PromiseNodeInternal(std::function<ReturnType(ConvertibleArgType)>&& onFulfill,
                   OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
@@ -485,28 +485,17 @@ namespace Promise2 {
           }
 
           try {
-            runFulfill(std::forward<ArgType>(Base::_previousPromise->value));
+            RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, std::forward<ConvertibleArgType>(Base::_previousPromise->value));
           } catch (...) {
             // previous task is failed
             Base::runReject();
           }
         });
       }
-
-    protected:
-      template<typename T>
-      void runFulfill(T&& preFulfilled) noexcept {
-        // warpped the exception
-        try {
-          RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, std::forward<T>(preFulfilled));
-        } catch (...) {
-          Base::runReject();
-        }
-      }
     }; 
 
     template<typename ReturnType, typename IsTask>
-    class PromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+    class PromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
       using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:
@@ -531,22 +520,12 @@ namespace Promise2 {
           }
 
           try {
-            runFulfill();
+            RunVoidFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill);
           } catch (...) {
             // previous task is failed
             Base::runReject();
           }
         });
-      }
-
-    protected:
-      void runFulfill() noexcept {
-        // warpped the exception
-        try {
-          RunVoidFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill);
-        } catch (...) {
-          Base::runReject();
-        }
       }
     }; 
   // end of details

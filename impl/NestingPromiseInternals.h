@@ -13,7 +13,7 @@
 namespace Promise2 {
 	namespace Details {
 		// nesting promise PromiseNodeInternal
-    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
     class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
@@ -46,7 +46,7 @@ namespace Promise2 {
     };  
 
     template<typename ReturnType, typename IsTask>
-    class NestingPromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+    class NestingPromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
       using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:

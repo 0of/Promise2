@@ -46,15 +46,15 @@ namespace Promise2 {
 namespace Promise2 {
   namespace Details {
     // deferred PromiseNodeInternal
-    template<typename ReturnType, typename ArgType, typename IsTask = std::false_type>
+    template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
     class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
 
     private:
-      std::function<void(PromiseDefer<ReturnType>&&, ArgType)> _onFulfill;
+      std::function<void(PromiseDefer<ReturnType>&&, ConvertibleArgType)> _onFulfill;
 
     public:
-      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&, ArgType)>&& onFulfill, 
+      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&, ConvertibleArgType)>&& onFulfill,
                   OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
@@ -75,13 +75,13 @@ namespace Promise2 {
 
           PromiseDefer<ReturnType> deferred{ Base::_forward };
           // no exception allowed
-          _onFulfill(std::move(deferred), std::forward<ArgType>(Base::_previousPromise->value));
+          _onFulfill(std::move(deferred), std::forward<ConvertibleArgType>(Base::_previousPromise->value));
         });
       }
     };
 
     template<typename ReturnType, typename IsTask>
-    class DeferredPromiseNodeInternal<ReturnType, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
+    class DeferredPromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
       using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
 
     private:
