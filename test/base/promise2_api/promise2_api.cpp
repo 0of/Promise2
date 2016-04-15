@@ -1057,10 +1057,36 @@ namespace OnRejectReturn {
   }
 }
 
+namespace ConvertibleArgument {
+  void test(int){}
+
+  template<typename T>
+  void init(T& spec) {
+    using context = CurrentContext;
+
+    spec
+    /* ==> */
+    .it("should implicitly convert `int` to `const int&`", [](const LTest::SharedCaseEndNotifier& notifier) {
+      constexpr int constant = 1;
+
+      Promise2::Promise<int>::Resolved(constant).then([=](const int& v) {
+        if (constant == v)
+          notifier->done();
+        else
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr e) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Promise2::Promise<void>::Resolved();
+      }, context::New());
+    });
+  }
+}
+
 TEST_ENTRY(CONTAINER_TYPE,
    SPEC_TFN(SpecFixedValue::init),
    SPEC_TFN(PromiseAPIsBase::init),
    SPEC_TFN(DataValidate::init),
-   SPEC_TFN(OnRejectReturn::init));
+   SPEC_TFN(OnRejectReturn::init),
+   SPEC_TFN(ConvertibleArgument::init));
 
 #endif // PROMISE2_API_CPP
