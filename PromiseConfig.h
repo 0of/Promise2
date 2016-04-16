@@ -13,4 +13,12 @@
 # define NESTING_PROMISE 0
 #endif // NESTING_PROMISE
 
+/*
+ * `onReject` resolved with default constructed type T if no `Promise<t>` explicitly provided
+ */
+#ifndef ONREJECT_IMPLICITLY_RESOLVED
+# define ONREJECT_IMPLICITLY_RESOLVED 1
+#endif // ONREJECT_IMPLICITLY_RESOLVED
+
+
 #endif // PROMISE_CONFIG_H
