@@ -163,6 +163,28 @@ namespace Promise2 {
     template<typename NonMatching> static auto Then(...) -> std::false_type;
   };
 
+#if ONREJECT_IMPLICITLY_RESOLVED
+  template<typename T>
+  struct OnRejectImplicitlyResolved {
+    static OnRejectFunction<T> wrapped(std::function<void(std::exception_ptr)>&&);
+
+    static OnRejectFunction<T> wrapped(std::function<Promise<T>(std::exception_ptr)>&& f) { return std::move(f); }
+
+    static auto wrapped(...) -> std::false_type;
+  };
+
+  template<>
+  struct OnRejectImplicitlyResolved<void> {
+    static OnRejectFunction<void> wrapped(std::function<void(std::exception_ptr)>&&);
+
+    static OnRejectFunction<void> wrapped(std::function<Promise<void>(std::exception_ptr)>&& f) {
+      return std::move(f);
+    }
+
+    static auto wrapped(...) -> std::false_type;
+  };
+#endif // ONREJECT_IMPLICITLY_RESOLVED
+
   //
   // @class Promise
   //
@@ -208,7 +230,12 @@ namespace Promise2 {
                     !std::is_same<declfn(onReject), std::false_type>::value , "you need to provide a callable");
 
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
-      auto onRejectFn = declfn(onReject){ std::move(onReject) };
+
+#if ONREJECT_IMPLICITLY_RESOLVED
+      auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfillFn)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
+#else
+      auto onRejectFn = declfn(onReject) { std::move(onReject) };
+#endif // ONREJECT_IMPLICITLY_RESOLVED
 
       static_assert(!std::is_same<decltype(Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context))), std::false_type>::value, "match nothing...");
 
@@ -267,7 +294,12 @@ namespace Promise2 {
               OnReject&& onReject, 
               ThreadContext* &&context) {
       auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
-      auto onRejectFn = declfn(onReject){ std::move(onReject) };
+
+#if ONREJECT_IMPLICITLY_RESOLVED
+      auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfillFn)::result_type>::wrapped(declfn(onReject){ std::move(onReject) });
+#else
+      auto onRejectFn = declfn(onReject) { std::move(onReject) };
+#endif // ONREJECT_IMPLICITLY_RESOLVED
 
       static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value &&
                     !std::is_same<decltype(onRejectFn), std::false_type>::value, "you need to provide a callable");

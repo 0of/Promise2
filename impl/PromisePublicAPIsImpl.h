@@ -18,6 +18,25 @@ namespace Promise2 {
 
   template<typename T> struct falsehood : public std::false_type {};
 
+#if ONREJECT_IMPLICITLY_RESOLVED
+  template<typename T>
+  OnRejectFunction<T> OnRejectImplicitlyResolved<T>::wrapped(std::function<void(std::exception_ptr)>&& f) {
+    OnRejectFunction<T> wrapped = [reject = move(f)](std::exception_ptr e){
+      reject(e);
+      return Promise<T>::Resolved(T());
+    };
+    return std::move(wrapped);
+  }
+
+  OnRejectFunction<void> OnRejectImplicitlyResolved<void>::wrapped(std::function<void(std::exception_ptr)>&& f) {
+    OnRejectFunction<void> wrapped = [reject = move(f)](std::exception_ptr e){
+      reject(e);
+      return Promise<void>::Resolved();
+    };
+    return std::move(wrapped);
+  }
+#endif // ONREJECT_IMPLICITLY_RESOLVED
+
 /**
  * Implementations
  */
