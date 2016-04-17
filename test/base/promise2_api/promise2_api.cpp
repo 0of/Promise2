@@ -1058,8 +1058,6 @@ namespace OnRejectReturn {
 }
 
 namespace ConvertibleArgument {
-  void test(int){}
-
   template<typename T>
   void init(T& spec) {
     using context = CurrentContext;
@@ -1082,11 +1080,68 @@ namespace ConvertibleArgument {
   }
 }
 
+namespace OnRejectImplicitlyResolved {
+
+  template<typename T>
+  void init(T& spec) {
+    using context = CurrentContext;
+
+    spec
+    /* ==> */
+    .it("should implicitly resolve with default int value", [](const LTest::SharedCaseEndNotifier& notifier) {
+      Promise2::Promise<int>::Rejected(std::make_exception_ptr(UserException())).then([=](int) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return 1;
+      }, [](std::exception_ptr) {
+        // do nothing
+      }, context::New()).then([=](int v) {
+        const int defaultValue = { int() };
+        if (v == defaultValue) 
+          notifier->done();
+        else 
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, context::New());
+    })
+
+    /* ==> */
+    .it("should implicitly resolve with default constructed object", [](const LTest::SharedCaseEndNotifier& notifier) {
+      static std::atomic_bool called = false;
+
+      class Class {
+      public:
+        Class() {
+          called = true;
+        }
+
+        Class(int) {}
+      };
+      
+      Promise2::Promise<int>::Rejected(std::make_exception_ptr(UserException())).then([=](int) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Class(1);
+      }, [](std::exception_ptr) {
+        // reset `called` flag
+        called = false;
+      }, context::New()).then([=](Class) {
+        if (called)
+          notifier->done();
+        else
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, context::New());
+    });
+  }
+}
+
 TEST_ENTRY(CONTAINER_TYPE,
-   SPEC_TFN(SpecFixedValue::init),
-   SPEC_TFN(PromiseAPIsBase::init),
-   SPEC_TFN(DataValidate::init),
-   SPEC_TFN(OnRejectReturn::init),
-   SPEC_TFN(ConvertibleArgument::init));
+  SPEC_TFN(SpecFixedValue::init),
+  SPEC_TFN(PromiseAPIsBase::init),
+  SPEC_TFN(DataValidate::init),
+  SPEC_TFN(OnRejectReturn::init),
+  SPEC_TFN(ConvertibleArgument::init),
+  SPEC_TFN(OnRejectImplicitlyResolved::init));
 
 #endif // PROMISE2_API_CPP
