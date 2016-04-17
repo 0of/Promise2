@@ -1107,7 +1107,7 @@ namespace OnRejectImplicitlyResolved {
 
     /* ==> */
     .it("should implicitly resolve with default constructed object", [](const LTest::SharedCaseEndNotifier& notifier) {
-      static std::atomic_bool called = false;
+      static std::atomic_bool called{ false };
 
       class Class {
       public:
