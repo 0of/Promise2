@@ -186,6 +186,22 @@ try {
 }
 ```
 
+### Working with Objective-c++
+- enable ARC(**add compiler option `-fobjc-arc` if not using Xcode**)
+- use `.mm` as your implement file extension
+- decorate `__block` keyword to c++ instance when using with objc block
+
+```objective-c++
+Promise2::Promise<BOOL>::Resolved(YES).then(^(BOOL fulfilled) { 
+  if (YES != fulfilled) { 
+    // assert?
+    return; 
+  }
+}, ^(std::exception_ptr e) {
+  return Promise2::Promise<void>::Rejected(e);
+}, MainThreadContext::New());
+```
+
 # API Reference
 ## ThreadContext
 `ThreadContext` represents the state of the running or pre-running thread and it has the ability to instruct the thread to schedule the task
