@@ -189,7 +189,7 @@ namespace Promise2 {
 
   template<typename T>
   template<typename ArgType>
-  Promise<T> Promise<T>::Resolved(ArgType&& arg) {
+  Promise<T> PromiseResolveSpawner<T>::Resolved(ArgType&& arg) {
     Promise<T> spawned;
     auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<T>>(std::forward<ArgType>(arg));
     spawned._node = node;
@@ -198,7 +198,7 @@ namespace Promise2 {
   }
 
   template<typename T>
-  Promise<T> Promise<T>::Rejected(std::exception_ptr e) {
+  Promise<T> PromiseResolveSpawner<T>::Rejected(std::exception_ptr e) {
     Promise<T> spawned;
     auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<T>>(e);
     spawned._node = node;
@@ -206,7 +206,7 @@ namespace Promise2 {
     return spawned;
   }
 
-  Promise<void> Promise<void>::Resolved() {
+  Promise<void> PromiseResolveSpawner<void>::Resolved() {
     Promise<void> spawned;
     auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<void>>();
     spawned._node = node;
@@ -214,7 +214,7 @@ namespace Promise2 {
     return spawned;
   }
 
-  Promise<void> Promise<void>::Rejected(std::exception_ptr e) {
+  Promise<void> PromiseResolveSpawner<void>::Rejected(std::exception_ptr e) {
     Promise<void> spawned;
     auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<void>>(e);
     spawned._node = node;

@@ -31,6 +31,11 @@ namespace Promise2 {
   // !
 
   //
+  // @class Void
+  //
+  class Void {};
+
+  //
   // @class ThreadContext
   //
   class ThreadContext {
@@ -114,6 +119,21 @@ namespace Promise2 {
   };
 
   template<typename T>
+  class PromiseResolveSpawner {
+  public:
+    template<typename ArgType>
+    static Promise<T> Resolved(ArgType&& arg);
+    static Promise<T> Rejected(std::exception_ptr e);
+  };
+
+  template<>
+  class PromiseResolveSpawner<void> {
+  public:
+    static Promise<void> Resolved();
+    static Promise<void> Rejected(std::exception_ptr e);
+  };
+
+  template<typename T>
   class PromiseThenable {
   public:
     template<typename NextT, typename ConvertibleT>
@@ -189,8 +209,9 @@ namespace Promise2 {
   // @class Promise
   //
   template<typename T>
-  class Promise : public PromiseSpawner<T> {
+  class Promise : public PromiseSpawner<T>, public PromiseResolveSpawner<T> {
     template<typename Type> friend class PromiseThenable;
+    template<typename Type> friend class PromiseResolveSpawner;
 
   private:    
     using Thenable = PromiseThenable<T>;
@@ -200,11 +221,6 @@ namespace Promise2 {
 
   public:
     using PromiseType = T;
-
-  public:
-    template<typename ArgType>
-    static Promise<T> Resolved(ArgType&& arg);
-    static Promise<T> Rejected(std::exception_ptr e);
 
   private:
     SharedPromiseNode<T> _node;
@@ -257,8 +273,9 @@ namespace Promise2 {
   };
 
   template<>
-  class Promise<void> : public PromiseSpawner<void> {
+  class Promise<void> : public PromiseSpawner<void>, public PromiseResolveSpawner<void> {
     template<typename Type> friend class PromiseThenable;
+    template<typename Type> friend class PromiseResolveSpawner;
 
   private:
     friend class PromiseSpawner<void>;
@@ -268,10 +285,6 @@ namespace Promise2 {
 
   public:
     using PromiseType = void;
-
-  public:
-    static SelfType Resolved();
-    static SelfType Rejected(std::exception_ptr e);
 
   private:
     SharedPromiseNode<void> _node; 
