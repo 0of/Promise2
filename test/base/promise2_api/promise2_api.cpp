@@ -932,6 +932,7 @@ namespace DataValidate {
 
   template<typename T>
   void init(T& spec) {
+      
     DATATEST_INIT(CurrentContext, CurrentContext:)
     DATATEST_INIT(STLThreadContext, STLThreadContext:)
 #ifdef __APPLE__

@@ -47,8 +47,8 @@ namespace Promise2 {
   namespace Details {
     // deferred PromiseNodeInternal
     template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
-    class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
-      using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
+    class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType, IsTask>;
 
     private:
       std::function<void(PromiseDefer<ReturnType>&&, ConvertibleArgType)> _onFulfill;
@@ -64,8 +64,6 @@ namespace Promise2 {
     public:
       virtual void run() noexcept override {
         std::call_once(Base::_called, [this]() {
-          ArgType preValue;
-
           try {
             Base::guard();
           } catch (...) {
@@ -75,7 +73,7 @@ namespace Promise2 {
 
           PromiseDefer<ReturnType> deferred{ Base::_forward };
           // no exception allowed
-          _onFulfill(std::move(deferred), std::forward<ConvertibleArgType>(Base::_previousPromise->value));
+          _onFulfill(std::move(deferred), Base::template get<ConvertibleArgType>());
         });
       }
     };

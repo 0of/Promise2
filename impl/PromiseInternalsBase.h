@@ -152,9 +152,8 @@ namespace Promise2 {
     //
     template<typename FulfillArgType, typename IsTask>
     class Fulfill {
-    protected:
-      SharedPromiseValue<FulfillArgType> _previousPromise;
     private:
+      SharedPromiseValue<FulfillArgType> _previousPromise;
       std::atomic_flag _attachGuard;
 
     protected:
@@ -187,25 +186,35 @@ namespace Promise2 {
 
         _previousPromise->accessGuard();
       }
+
+      template<typename T>
+      inline T get() {
+        return std::forward<T>(_previousPromise->value);
+      }
     };
 
     template<>
-    class Fulfill<void, std::true_type> {
+    class Fulfill<Void, std::true_type> {
     protected:
       Fulfill()
       {}
-
+        
     public:
       virtual ~Fulfill() = default;
-
+        
     public:
-      void attach(const SharedPromiseValue<void>& previousPromise) {
-        throw std::logic_error("task cannot be chained");
+      void attach(const SharedPromiseValue<Void>& previousPromise) {
+          throw std::logic_error("task cannot be chained");
       }
-
+      
       void guard() {}
-    };
 
+      template<typename T>
+      inline T get() {
+        return Void{};
+      }
+    };
+      
     template<typename ForwardType>
     class ForwardFulfillPolicy {
     public:
@@ -460,8 +469,8 @@ namespace Promise2 {
     // Promise node
     //
     template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
-    class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
-      using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
+    class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType, IsTask>;
 
     private:
       std::function<ReturnType(ConvertibleArgType)> _onFulfill;
@@ -485,7 +494,7 @@ namespace Promise2 {
           }
 
           try {
-            RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, std::forward<ConvertibleArgType>(Base::_previousPromise->value));
+            RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, Base::template get<ConvertibleArgType>());
           } catch (...) {
             // previous task is failed
             Base::runReject();

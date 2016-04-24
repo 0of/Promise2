@@ -25,15 +25,27 @@ namespace Promise2 {
     template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<T>>;
   } // Details
 
-  template<typename T> class Promise;
-  template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<T>>;
-  template<typename T> using OnRejectFunction = std::function<Promise<T>(std::exception_ptr)>;
-  // !
-
   //
   // @class Void
   //
   class Void {};
+
+  // 
+  // @trait BoxVoid UnboxVoid
+  //
+  // convert void to Void
+  template<typename T>
+  using BoxVoid = typename std::conditional_t<std::is_void<T>::value, Void, T>;
+
+  // covert Void to void
+  template<typename T>
+  using UnboxVoid = typename std::conditional_t<std::is_same<T, Void>::value, void, T>;
+
+  // !
+  template<typename T> class Promise;
+  template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<BoxVoid<T>>>;
+  template<typename T> using OnRejectFunction = std::function<Promise<UnboxVoid<T>>(std::exception_ptr)>;
+  // !
 
   //
   // @class ThreadContext
