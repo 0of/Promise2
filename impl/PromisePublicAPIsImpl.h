@@ -211,9 +211,6 @@ namespace Promise2 {
   template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
   template<typename T> bool Promise<T>::isRejected() const CALL_NODE_IMP(isRejected)
 
-  bool Promise<void>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
-  bool Promise<void>::isRejected() const CALL_NODE_IMP(isRejected)
-
   template<typename T>
   template<typename ArgType>
   Promise<T> PromiseResolveSpawner<T>::Resolved(ArgType&& arg) {

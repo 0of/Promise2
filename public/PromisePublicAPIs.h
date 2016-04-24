@@ -283,69 +283,6 @@ namespace Promise2 {
   public:
     inline SharedPromiseNode<T> internal() const { return _node; }
   };
-
-  template<>
-  class Promise<void> : public PromiseSpawner<void>, public PromiseResolveSpawner<void> {
-    template<typename Type> friend class PromiseThenable;
-    template<typename Type> friend class PromiseResolveSpawner;
-
-  private:
-    friend class PromiseSpawner<void>;
-
-    using Thenable = PromiseThenable<void>;
-    using SelfType = Promise<void>;
-
-  public:
-    using PromiseType = void;
-
-  private:
-    SharedPromiseNode<void> _node; 
-
-  public:
-    // empty constructor
-    Promise() = default;
-
-    // copy constructor
-    Promise(const SelfType& ) = default;
-    // move constructor
-    Promise(SelfType&& promise) = default;
-
-    SelfType& operator = (const SelfType& ) = default;
-    SelfType& operator = (SelfType&& ) = default;
-
-  public:
-    template<typename OnFulfill, typename OnReject>
-    auto then(OnFulfill&& onFulfill,
-              OnReject&& onReject, 
-              ThreadContext* &&context) {
-      auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
-
-#if ONREJECT_IMPLICITLY_RESOLVED
-      auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfillFn)::result_type>::wrapped(declfn(onReject){ std::move(onReject) });
-#else
-      auto onRejectFn = declfn(onReject) { std::move(onReject) };
-#endif // ONREJECT_IMPLICITLY_RESOLVED
-
-      static_assert(!std::is_same<decltype(onFulfillFn), std::false_type>::value &&
-                    !std::is_same<decltype(onRejectFn), std::false_type>::value, "you need to provide a callable");
-
-      static_assert(!std::is_same<decltype(Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context))), std::false_type>::value, "match nothing...");
-
-      if (!isValid()) throw std::logic_error("invalid promise");
-      return Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context));
-    }
-
-  public:
-    bool isValid() const {
-      return !!_node;
-    }
-
-    bool isFulfilled() const;
-    bool isRejected() const;
-
-  public:
-    inline SharedPromiseNode<void> internal() const { return _node; }
-  };
 }
  
 #endif // PROMISE_PUBLIC_APIS_H
