@@ -3,6 +3,7 @@
 
 #include "../public/PromisePublicAPIs.h"
 #include "PromiseInternalsBase.h"
+#include "../trait/void_traits.h"
 
 #if DEFERRED_PROMISE
 #include "DeferredPromiseInternals.h"
@@ -37,27 +38,40 @@ namespace Promise2 {
   }
 #endif // ONREJECT_IMPLICITLY_RESOLVED
 
+  template<typename PredType, typename ReturnType, typename... ArgTypes>
+  auto eliminateVoid(std::function<ReturnType(ArgTypes...)>&& f) {
+    return std::move(VoidTrait::ArgVoid<typename PredType::template type<ArgTypes...>>::currying(
+      VoidTrait::ReturnVoid<ReturnType>::currying(std::move(f))
+    ));
+  }
+
+  template<typename PredType, typename ReturnType>
+  auto eliminateVoid(std::function<ReturnType()>&& f) {
+    return std::move(VoidTrait::ArgVoid<typename PredType::template type<void>>::currying(
+      VoidTrait::ReturnVoid<ReturnType>::currying(std::move(f))
+    ));
+  }
+
 /**
  * Implementations
  */
-#define NEW_IMP(internal) \
+#define NEW_IMP(internal, ArgPred) \
    { Promise<T> spawned; \
    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-   auto node = std::make_shared<internal<T, void, void, std::true_type>>(std::move(task), \
+   auto node = std::make_shared<internal<BoxVoid<T>, Void, Void, std::true_type>>(eliminateVoid<ArgPred>(std::move(task)), \
                   std::function<Promise<T>(std::exception_ptr)>(), sharedContext); \
-   auto runnable = std::bind(&Details::PromiseNode<T>::run, node); \
+   auto runnable = std::bind(&Details::PromiseNode<BoxVoid<T>>::run, node); \
    sharedContext->scheduleToRun(std::move(runnable)); \
    \
    spawned._node = node; \
    return spawned; }
 
-#define THEN_IMP(internal, T, ConvertibleT) \
+#define THEN_IMP(internal, T, ConvertibleT, ArgPred) \
   { static_assert(std::is_convertible<T, ConvertibleT>::value, "implicitly argument type conversion failed"); \
     auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-    \
-    auto nextNode = std::make_shared<internal<NextT, T, ConvertibleT>>(std::move(onFulfill), std::move(onReject), sharedContext); \
+    auto nextNode = std::make_shared<internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>>>(eliminateVoid<ArgPred>(std::move(onFulfill)), eliminateVoid<ArgPred>(std::move(onReject)), sharedContext); \
     node->chainNext(nextNode, [=]() { \
-      auto runnable = std::bind(&Details::PromiseNode<NextT>::run, nextNode); \
+      auto runnable = std::bind(&Details::PromiseNode<BoxVoid<NextT>>::run, nextNode); \
       sharedContext->scheduleToRun(std::move(runnable)); \
     }); \
     \
@@ -71,14 +85,27 @@ namespace Promise2 {
       } \
       return _node->method(); }
 
+  // predicates it is necessary to append `Void` type to argument list
+  struct ArgTypePred {
+    template<typename... Args>
+    using type = typename VoidTrait::LastType<Args...>::Type;
+  };
+
+   // `void` type if last argument type is not equal to given one
+  template<typename GivenArgType>
+  struct GivenArgTypePred {
+    template<typename... Args>
+    using type = std::conditional_t<std::is_same<VoidTrait::LastType<Args...>, GivenArgType>::value, GivenArgType, void>;
+  };
+
   template<typename T>
   Promise<T> PromiseSpawner<T>::Spawn(std::function<T(void)>&& task, ThreadContext* &&context) 
-    NEW_IMP(Details::PromiseNodeInternal)
+    NEW_IMP(Details::PromiseNodeInternal, ArgTypePred)
 
 #if DEFERRED_PROMISE
   template<typename T>
   Promise<T> PromiseSpawner<T>::Spawn(std::function<void(PromiseDefer<T>&&)>&& task, ThreadContext* &&context) 
-    NEW_IMP(Details::DeferredPromiseNodeInternal)
+    NEW_IMP(Details::DeferredPromiseNodeInternal, GivenArgTypePred<PromiseDefer<T>&&>)
 #else
   template<typename T>
   Promise<T> PromiseSpawner<T>::Spawn(std::function<void(PromiseDefer<T>&&)>&&, ThreadContext* &&) {
@@ -89,7 +116,7 @@ namespace Promise2 {
 #if NESTING_PROMISE
   template<typename T>
   Promise<T> PromiseSpawner<T>::Spawn(std::function<Promise<T>()>&& task, ThreadContext* &&context) 
-    NEW_IMP(Details::NestingPromiseNodeInternal)
+    NEW_IMP(Details::NestingPromiseNodeInternal, ArgTypePred)
 #else
   template<typename T>
   Promise<T> PromiseSpawner<T>::Spawn(std::function<Promise<T>()>&&, ThreadContext* &&) {
@@ -103,14 +130,14 @@ namespace Promise2 {
                              std::function<NextT(ConvertibleT)>&& onFulfill,
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context) 
-    THEN_IMP(Details::PromiseNodeInternal, T, ConvertibleT)
+    THEN_IMP(Details::PromiseNodeInternal, T, ConvertibleT, ArgTypePred)
 
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node,
                              std::function<NextT(void)>&& onFulfill,
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
-    THEN_IMP(Details::PromiseNodeInternal, void, void)
+    THEN_IMP(Details::PromiseNodeInternal, void, void, ArgTypePred)
 
 
 #if DEFERRED_PROMISE
@@ -120,14 +147,14 @@ namespace Promise2 {
                              std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
-    THEN_IMP(Details::DeferredPromiseNodeInternal, T, ConvertibleT)
+    THEN_IMP(Details::DeferredPromiseNodeInternal, T, ConvertibleT, GivenArgTypePred<PromiseDefer<NextT>&&>)
 
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node,
                              std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
-    THEN_IMP(Details::DeferredPromiseNodeInternal, void, void)
+    THEN_IMP(Details::DeferredPromiseNodeInternal, void, void, GivenArgTypePred<PromiseDefer<NextT>&&>)
 #else
   template<typename T>
   template<typename NextT, typename ConvertibleT>
@@ -154,14 +181,14 @@ namespace Promise2 {
                              std::function<Promise<NextT>(ConvertibleT)>&& onFulfill,
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
-    THEN_IMP(Details::NestingPromiseNodeInternal, T, ConvertibleT)
+    THEN_IMP(Details::NestingPromiseNodeInternal, T, ConvertibleT, ArgTypePred)
 
   template<typename NextT>
   Promise<NextT> PromiseThenable<void>::Then(SharedPromiseNode<void>& node, 
                              std::function<Promise<NextT>(void)>&& onFulfill,
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
-    THEN_IMP(Details::NestingPromiseNodeInternal, void, void)
+    THEN_IMP(Details::NestingPromiseNodeInternal, void, void, ArgTypePred)
 #else
   template<typename T>
   template<typename NextT, typename ConvertibleT>
@@ -208,7 +235,7 @@ namespace Promise2 {
 
   Promise<void> PromiseResolveSpawner<void>::Resolved() {
     Promise<void> spawned;
-    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<void>>();
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<Void>>();
     spawned._node = node;
 
     return spawned;
@@ -216,7 +243,7 @@ namespace Promise2 {
 
   Promise<void> PromiseResolveSpawner<void>::Rejected(std::exception_ptr e) {
     Promise<void> spawned;
-    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<void>>(e);
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<Void>>(e);
     spawned._node = node;
 
     return spawned;

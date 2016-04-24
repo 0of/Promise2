@@ -8,20 +8,22 @@
 #ifndef NESTING_PROMISE_INTERNALS_H
 #define NESTING_PROMISE_INTERNALS_H
 
+#include "../public/PromisePublicAPIs.h"
 #include "PromiseInternalsBase.h"
 
 namespace Promise2 {
 	namespace Details {
 		// nesting promise PromiseNodeInternal
     template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
-    class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, std::false_type> {
-      using Base = PromiseNodeInternalBase<ReturnType, ArgType, std::false_type>;
+    class NestingPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+      using Base = PromiseNodeInternalBase<ReturnType, ArgType, IsTask>;
+      using OnFulfill = std::function<Promise<UnboxVoid<ReturnType>>(ArgType)>;
 
     private:
-      std::function<Promise<ReturnType>(ArgType)> _onFulfill;
+      OnFulfill _onFulfill;
 
     public:
-      NestingPromiseNodeInternal(std::function<Promise<ReturnType>(ArgType)>&& onFulfill, 
+      NestingPromiseNodeInternal(OnFulfill&& onFulfill, 
                   OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
@@ -35,9 +37,9 @@ namespace Promise2 {
 
           try {
             Base::guard();
-            wrapped = std::move(_onFulfill(std::forward<ReturnType>(Base::_previousPromise->value)));
+            wrapped = std::move(_onFulfill(Base::template get<ConvertibleArgType>()));
           } catch (...) {
-            wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));
+            wrapped = std::move(Promise<UnboxVoid<ReturnType>>::Rejected(std::current_exception()));
           }
 
           wrapped.internal()->chainNext(Base::_forward);

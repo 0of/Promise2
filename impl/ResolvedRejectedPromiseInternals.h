@@ -32,7 +32,7 @@ namespace Promise2 {
       ResolvedRejectedPromiseInternals()
         : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
         // fulfilled the value
-        ForwardFulfillPolicy<ReturnType>::wrappedFulfill(_promiseValue);
+        ForwardFulfillPolicy<ReturnType>::wrappedFulfill(_promiseValue, Void{});
       }
 
       // exception
