@@ -232,7 +232,7 @@ namespace Promise2 {
 
   Promise<void> PromiseResolveSpawner<void>::Resolved() {
     Promise<void> spawned;
-    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<Void>>();
+    auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<Void>>(Void{});
     spawned._node = node;
 
     return spawned;

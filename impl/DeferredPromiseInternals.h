@@ -35,7 +35,7 @@ namespace Promise2 {
   {}
 
 	void PromiseDefer<void>::setResult() {
-		_core->fulfill();
+    _core->fulfill(Void{});
 	}
 
   void PromiseDefer<void>::setException(std::exception_ptr e) {
@@ -74,38 +74,6 @@ namespace Promise2 {
           PromiseDefer<ReturnType> deferred{ Base::_forward };
           // no exception allowed
           _onFulfill(std::move(deferred), Base::template get<ConvertibleArgType>());
-        });
-      }
-    };
-
-    template<typename ReturnType, typename IsTask>
-    class DeferredPromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
-      using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
-
-    private:
-      std::function<void(PromiseDefer<ReturnType>&&)> _onFulfill;
-
-    public:
-      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&)>&& onFulfill, 
-                  OnRejectFunction<ReturnType>&& onReject,
-                  const std::shared_ptr<ThreadContext>& context)
-        : Base(std::move(onReject), context)
-        , _onFulfill{ std::move(onFulfill) }
-      {}
-
-    public:
-      virtual void run() noexcept override {
-        std::call_once(Base::_called, [this]() {
-          try {
-            Base::guard();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
-
-          PromiseDefer<ReturnType> deferred{ Base::_forward };
-          // no exception allowed
-          _onFulfill(std::move(deferred));
         });
       }
     };

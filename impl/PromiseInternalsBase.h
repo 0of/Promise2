@@ -98,7 +98,6 @@ namespace Promise2 {
       PromiseValueBase(const PromiseValueBase&&) = delete;
     };
 
-
     template<typename T>
     class PromiseValue : public PromiseValueBase {
     public:
@@ -121,23 +120,6 @@ namespace Promise2 {
         }
 
         value = std::forward<ValueType>(v);
-        _hasAssigned = true;
-      }
-    };
-
-    template<>
-    class PromiseValue<void> : public PromiseValueBase {
-    public:
-      PromiseValue() = default;
-      ~PromiseValue() = default;
-
-    public:
-      void setValue() {
-        if (_assignGuard.test_and_set()) {
-          // already assigned or is assigning
-          throw std::logic_error("promise duplicated assignments");
-        }
-
         _hasAssigned = true;
       }
     };
@@ -214,38 +196,6 @@ namespace Promise2 {
         return Void{};
       }
     };
-      
-    template<typename ForwardType>
-    class ForwardFulfillPolicy {
-    public:
-      template<typename T>
-      static void wrappedFulfill(SharedPromiseValue<ForwardType>& promise, T&& value) {
-        promise->setValue(std::forward<T>(value));
-      }
-
-      static void wrappedFulfill(SharedPromiseValue<void>& promise) {}
-    };
-
-    template<>
-    class ForwardFulfillPolicy<void> {
-    public:
-      template<typename T>
-      static void wrappedFulfill(SharedPromiseValue<void>& promise, T&& value) {}
-
-      static void wrappedFulfill(SharedPromiseValue<void>& promise) {
-        promise->setValue();
-      }
-    };
-
-    template<typename ForwardType>
-    struct ProxyForwardPolicy {
-      static void forwarding(const DeferPromiseCore<ForwardType>& core, const SharedPromiseValue<ForwardType>& promise);
-    };
-
-    template<>
-    struct ProxyForwardPolicy<void> {
-      static void forwarding(const DeferPromiseCore<void>& core, const SharedPromiseValue<void>& promise);
-    };
 
     //
     // forward traits
@@ -311,7 +261,7 @@ namespace Promise2 {
           if (valuePromise->isExceptionCase()) {
             nextForward->reject(valuePromise->fetchException());
           } else {
-            ProxyForwardPolicy<ForwardType>::forwarding(nextForward, valuePromise);
+            nextForward->fulfill(valuePromise->value);
           }
         };
 
@@ -325,21 +275,13 @@ namespace Promise2 {
 
       template<typename T>
       void fulfill(T&& value) {
-        ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise, std::forward<T>(value));
+        _promise->setValue(std::forward<T>(value));
 
         if (_notify) {
           _notify();
         }
       }
-
-      void fulfill() {
-        ForwardFulfillPolicy<ForwardType>::wrappedFulfill(_promise);
-
-        if (_notify) {
-          _notify();
-        }
-      }
-
+        
       void reject(std::exception_ptr exception) {
         _promise->setException(exception);
         if (_notify) {
@@ -358,16 +300,6 @@ namespace Promise2 {
       bool isRejected() const {
         return _promise->hasAssigned() && _promise->isExceptionCase();
       }
-    };
-      
-
-    template<typename ForwardType>
-    void ProxyForwardPolicy<ForwardType>::forwarding(const DeferPromiseCore<ForwardType>& core, const SharedPromiseValue<ForwardType>& promise) {
-      core->fulfill(promise->value);
-    }
-
-    void ProxyForwardPolicy<void>::forwarding(const DeferPromiseCore<void>& core, const SharedPromiseValue<void>& promise) {
-      core->fulfill();
     };
 
     template<typename ReturnType, typename ArgType, typename IsTask>
@@ -431,40 +363,6 @@ namespace Promise2 {
       PromiseNodeInternalBase(const PromiseNodeInternalBase&) = delete;
     };
 
-    template<typename ReturnType>
-    struct RunArgFulfillPolicy {
-      template<typename ForwardPointer, typename FulfillFn, typename ArgType>
-      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn, ArgType&& value) {
-        forward->fulfill(fulfillFn(std::forward<ArgType>(value)));
-      }
-    };
-
-    template<>
-    struct RunArgFulfillPolicy<void> {
-      template<typename ForwardPointer, typename FulfillFn, typename ArgType>
-      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn, ArgType&& value) {
-        fulfillFn(std::forward<ArgType>(value));
-        forward->fulfill();
-      }
-    };
-
-    template<typename ReturnType>
-    struct RunVoidFulfillPolicy {
-      template<typename ForwardPointer, typename FulfillFn>
-      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn) {
-        forward->fulfill(fulfillFn());
-      }
-    };
-
-    template<>
-    struct RunVoidFulfillPolicy<void> {
-      template<typename ForwardPointer, typename FulfillFn>
-      static void runFulfill(ForwardPointer& forward, FulfillFn& fulfillFn) {
-        fulfillFn();
-        forward->fulfill();
-      }
-    };
-
     //
     // Promise node
     //
@@ -494,42 +392,9 @@ namespace Promise2 {
           }
 
           try {
-            RunArgFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill, Base::template get<ConvertibleArgType>());
-          } catch (...) {
-            // previous task is failed
-            Base::runReject();
-          }
-        });
-      }
-    }; 
-
-    template<typename ReturnType, typename IsTask>
-    class PromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
-      using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
-
-    private:
-      std::function<ReturnType()> _onFulfill;
-
-    public:
-      PromiseNodeInternal(std::function<ReturnType()>&& onFulfill, 
-                  OnRejectFunction<ReturnType>&& onReject,
-                  const std::shared_ptr<ThreadContext>& context)
-        : Base(std::move(onReject), context)
-        , _onFulfill{ std::move(onFulfill) }
-      {}
-
-    public:
-      virtual void run() override {
-        std::call_once(Base::_called, [this]() {
-          try {
-            Base::guard();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
-
-          try {
-            RunVoidFulfillPolicy<ReturnType>::runFulfill(Base::_forward, _onFulfill);
+            Base::_forward->fulfill(
+              _onFulfill(Base::template get<ConvertibleArgType>())
+            );
           } catch (...) {
             // previous task is failed
             Base::runReject();

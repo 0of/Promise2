@@ -18,12 +18,6 @@
 #include "../trait/declfn.h"
 
 namespace Promise2 {
-  // declarations
-  namespace Details {
-    template<typename T> class PromiseNode;
-    template<typename T> class Forward;
-    template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<T>>;
-  } // Details
 
   //
   // @class Void
@@ -41,6 +35,13 @@ namespace Promise2 {
   template<typename T>
   using UnboxVoid = typename std::conditional_t<std::is_same<T, Void>::value, void, T>;
 
+  // declarations
+  namespace Details {
+    template<typename T> class PromiseNode;
+    template<typename T> class Forward;
+    template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<BoxVoid<T>>>;
+  } // Details
+    
   // !
   template<typename T> class Promise;
   template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<BoxVoid<T>>>;
