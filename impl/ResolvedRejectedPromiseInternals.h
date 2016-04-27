@@ -25,14 +25,7 @@ namespace Promise2 {
       explicit ResolvedRejectedPromiseInternals(ValueType&& v)
         : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
         // fulfilled the value
-        ForwardFulfillPolicy<ReturnType>::wrappedFulfill(_promiseValue, std::forward<ValueType>(v));
-      }
-
-      // `void`
-      ResolvedRejectedPromiseInternals()
-        : _promiseValue{ std::make_shared<typename SharedPromiseValue<ReturnType>::element_type>() } {
-        // fulfilled the value
-        ForwardFulfillPolicy<ReturnType>::wrappedFulfill(_promiseValue, Void{});
+        _promiseValue->setValue(std::forward<ValueType>(v));
       }
 
       // exception
@@ -56,7 +49,7 @@ namespace Promise2 {
         if (_promiseValue->isExceptionCase()) {
           nextForward->reject(_promiseValue->fetchException());
         } else {
-          ProxyForwardPolicy<ReturnType>::forwarding(nextForward, _promiseValue);
+          nextForward->fulfill(_promiseValue->value);
         }
       }
 

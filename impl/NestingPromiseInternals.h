@@ -46,38 +46,6 @@ namespace Promise2 {
       	});
       }
     };  
-
-    template<typename ReturnType, typename IsTask>
-    class NestingPromiseNodeInternal<ReturnType, void, void, IsTask> : public PromiseNodeInternalBase<ReturnType, void, IsTask> {
-      using Base = PromiseNodeInternalBase<ReturnType, void, IsTask>;
-
-    private:
-      std::function<Promise<ReturnType>()> _onFulfill;
-
-    public:
-      NestingPromiseNodeInternal(std::function<Promise<ReturnType>()>&& onFulfill, 
-                  OnRejectFunction<ReturnType>&& onReject,
-                  const std::shared_ptr<ThreadContext>& context)
-        : Base(std::move(onReject), context)
-        , _onFulfill{ std::move(onFulfill) }
-      {}
-
-    public:
-      virtual void run() override {
-       	std::call_once(Base::_called, [this]() {
-          Promise<ReturnType> wrapped;
-
-          try {
-            Base::guard();
-            wrapped = std::move(_onFulfill());
-          } catch (...) {
-            wrapped = std::move(Promise<ReturnType>::Rejected(std::current_exception()));
-          }
-
-          wrapped.internal()->chainNext(Base::_forward);
-      	});
-      }
-    };  
 	} // Details
 }
 
