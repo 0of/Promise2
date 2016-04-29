@@ -171,31 +171,6 @@ namespace Promise2 {
     template<typename NonMatching> static auto Then(...) -> std::false_type;
   };
 
-  template<>
-  class PromiseThenable<void> {
-  public:
-    template<typename NextT>
-    static Promise<NextT> Then(SharedPromiseNode<void>& node,
-                               std::function<NextT(void)>&& onFulfill, 
-                               OnRejectFunction<NextT>&& onReject,
-                               ThreadContext* &&context);
-
-    template<typename NextT>
-    static Promise<NextT> Then(SharedPromiseNode<void>& node,
-                               std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
-                               OnRejectFunction<NextT>&& onReject,
-                               ThreadContext* &&context);
-
-    template<typename NextT>
-    static Promise<NextT> Then(SharedPromiseNode<void>& node, 
-                               std::function<Promise<NextT>(void)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject,
-                               ThreadContext* &&context);
-
-    // matching nothing
-    template<typename NonMatching> static auto Then(...) -> std::false_type;
-  };
-
 #if ONREJECT_IMPLICITLY_RESOLVED
   template<typename T>
   struct OnRejectImplicitlyResolved {
