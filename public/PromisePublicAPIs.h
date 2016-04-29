@@ -150,46 +150,21 @@ namespace Promise2 {
   class PromiseThenable {
   public:
     template<typename NextT, typename ConvertibleT>
-    static Promise<NextT> Then(SharedPromiseNode<T>& node,
+    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
                                std::function<NextT(ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
     template<typename NextT, typename ConvertibleT>
-    static Promise<NextT> Then(SharedPromiseNode<T>& node,
+    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
                                std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
     template<typename NextT, typename ConvertibleT>
-    static Promise<NextT> Then(SharedPromiseNode<T>& node, 
-                               std::function<Promise<NextT>(ConvertibleT)>&& onFulfill,
+    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node, 
+                               std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
-
-    // matching nothing
-    template<typename NonMatching> static auto Then(...) -> std::false_type;
-  };
-
-  template<>
-  class PromiseThenable<void> {
-  public:
-    template<typename NextT>
-    static Promise<NextT> Then(SharedPromiseNode<void>& node,
-                               std::function<NextT(void)>&& onFulfill, 
-                               OnRejectFunction<NextT>&& onReject,
-                               ThreadContext* &&context);
-
-    template<typename NextT>
-    static Promise<NextT> Then(SharedPromiseNode<void>& node,
-                               std::function<void(PromiseDefer<NextT>&&)>&& onFulfill, 
-                               OnRejectFunction<NextT>&& onReject,
-                               ThreadContext* &&context);
-
-    template<typename NextT>
-    static Promise<NextT> Then(SharedPromiseNode<void>& node, 
-                               std::function<Promise<NextT>(void)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject,
                                ThreadContext* &&context);
 
     // matching nothing
@@ -218,6 +193,21 @@ namespace Promise2 {
   };
 #endif // ONREJECT_IMPLICITLY_RESOLVED
 
+  // void eliminator
+  struct VoidEliminator {
+    template<typename ReturnType, typename... ArgsType>
+    static auto eliminate(std::function<ReturnType(ArgsType...)>&&);
+
+    template<typename ReturnType>
+    static auto eliminate(std::function<ReturnType()>&&);
+
+    template<typename ReturnType, typename NextT>
+    static auto eliminate(std::function<void(PromiseDefer<NextT>&&)>&&);
+
+    template<typename ReturnType, typename NextT, typename T>
+    static auto eliminate(std::function<void(PromiseDefer<NextT>&&, T)>&&);
+  };
+
   //
   // @class Promise
   //
@@ -227,7 +217,7 @@ namespace Promise2 {
     template<typename Type> friend class PromiseResolveSpawner;
 
   private:    
-    using Thenable = PromiseThenable<T>;
+    using Thenable = PromiseThenable<BoxVoid<T>>;
     using SelfType = Promise<T>;
 
     friend class PromiseSpawner<T>;
@@ -258,10 +248,10 @@ namespace Promise2 {
       static_assert(!std::is_same<declfn(onFulfill), std::false_type>::value &&
                     !std::is_same<declfn(onReject), std::false_type>::value , "you need to provide a callable");
 
-      auto onFulfillFn = declfn(onFulfill){ std::move(onFulfill) };
+      auto onFulfillFn = VoidEliminator::eliminate(declfn(onFulfill){ std::move(onFulfill) });
 
 #if ONREJECT_IMPLICITLY_RESOLVED
-      auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfillFn)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
+      auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfill)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
 #else
       auto onRejectFn = declfn(onReject) { std::move(onReject) };
 #endif // ONREJECT_IMPLICITLY_RESOLVED
