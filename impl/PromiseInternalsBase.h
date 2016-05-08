@@ -175,7 +175,7 @@ namespace Promise2 {
 
       template<typename T>
       inline T get() {
-        return std::forward<T>(_previousPromise->getValue<T>());
+        return std::forward<T>(_previousPromise->template getValue<T>());
       }
     };
 
@@ -265,7 +265,7 @@ namespace Promise2 {
           if (valuePromise->isExceptionCase()) {
             nextForward->reject(valuePromise->fetchException());
           } else {
-            nextForward->fulfill(valuePromise->getValue<ForwardType>());
+            nextForward->fulfill(valuePromise->template getValue<ForwardType>());
           }
         };
 
