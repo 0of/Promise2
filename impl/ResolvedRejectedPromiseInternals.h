@@ -49,7 +49,7 @@ namespace Promise2 {
         if (_promiseValue->isExceptionCase()) {
           nextForward->reject(_promiseValue->fetchException());
         } else {
-          nextForward->fulfill(_promiseValue->value);
+          nextForward->fulfill(_promiseValue->template getValue<ReturnType>());
         }
       }
 

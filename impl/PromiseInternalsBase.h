@@ -100,13 +100,12 @@ namespace Promise2 {
 
     template<typename T>
     class PromiseValue : public PromiseValueBase {
-    public:
-      // allow to direct access
-      T value;
+    private:
+      std::unique_ptr<T> _valuePointer;
 
     public:
       PromiseValue()
-        : value()
+        : _valuePointer()
       {}
 
       ~PromiseValue() = default;
@@ -119,8 +118,13 @@ namespace Promise2 {
           throw std::logic_error("promise duplicated assignments");
         }
 
-        value = std::forward<ValueType>(v);
+        _valuePointer = std::make_unique<T>(std::forward<ValueType>(v));
         _hasAssigned = true;
+      }
+
+      template<typename ValueType>
+      ValueType getValue() {
+        return static_cast<ValueType>(*_valuePointer);
       }
     };
 
@@ -171,7 +175,7 @@ namespace Promise2 {
 
       template<typename T>
       inline T get() {
-        return std::forward<T>(_previousPromise->value);
+        return std::forward<T>(_previousPromise->template getValue<T>());
       }
     };
 
@@ -261,7 +265,7 @@ namespace Promise2 {
           if (valuePromise->isExceptionCase()) {
             nextForward->reject(valuePromise->fetchException());
           } else {
-            nextForward->fulfill(valuePromise->value);
+            nextForward->fulfill(valuePromise->template getValue<ForwardType>());
           }
         };
 
