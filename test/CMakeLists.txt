@@ -42,6 +42,8 @@ if(UNIX)
 add_subdirectory(base/ocpp_mixing)
 endif()
 
+add_subdirectory(base/promise2_ref_pointer_types)
+
 add_custom_target(run_test COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/run_test.sh")
 
 if(${COVERAGE_REPORT})

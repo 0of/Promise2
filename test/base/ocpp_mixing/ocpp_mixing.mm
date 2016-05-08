@@ -59,9 +59,6 @@ protected:
 
 #define CONTAINER_TYPE GCDContainer
 
-class UserException : public std::exception {};
-class AssertionFailed : public std::exception {};
-
 using MainThreadContext = ThreadContextImpl::GCD::MainThreadContext;
 
 template<typename T>

@@ -37,6 +37,9 @@ public:
 using TestSpec = LTest::SequentialTestSpec;
 using DefaultContainer = LTest::SequentialTestRunnableContainer;
 
+class UserException : public std::exception {};
+class AssertionFailed : public std::exception {};
+
 // template function
 #define SPEC_TFN(fn) fn<TestSpec>
 

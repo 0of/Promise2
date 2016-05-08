@@ -100,9 +100,6 @@ using MainThreadContext = ThreadContextImpl::GCD::MainThreadContext;
 # define CONTAINER_TYPE DefaultContainer
 #endif // __APPLE__
 
-class UserException : public std::exception {};
-class AssertionFailed : public std::exception {};
-
 using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
 
 template<typename T>
