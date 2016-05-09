@@ -104,6 +104,7 @@ namespace Promise2 {
       std::unique_ptr<T> _valuePointer;
 
     public:
+
       template<typename ValueType>
       void setValue(ValueType&& v) {
         if (_assignGuard.test_and_set()) {
