@@ -104,13 +104,7 @@ namespace Promise2 {
       std::unique_ptr<T> _valuePointer;
 
     public:
-      PromiseValue()
-        : _valuePointer()
-      {}
 
-      ~PromiseValue() = default;
-
-    public:
       template<typename ValueType>
       void setValue(ValueType&& v) {
         if (_assignGuard.test_and_set()) {
@@ -128,10 +122,70 @@ namespace Promise2 {
       }
     };
 
+    template<typename T>
+    class PromisePointerValue : public PromiseValueBase {
+    private:
+      // NOT take the ownership
+      std::remove_cv_t<T> _value;
+
+    public:
+      template<typename ValueType>
+      void setValue(const ValueType& v) {
+        static_assert(std::is_pointer<ValueType>::value, "given type must be kind of pointer");
+
+        if (_assignGuard.test_and_set()) {
+          // already assigned or is assigning
+          throw std::logic_error("promise duplicated assignments");
+        }
+
+        _value = v;
+        _hasAssigned = true;
+      }
+
+      template<typename ValueType>
+      ValueType getValue() {
+        return static_cast<ValueType>(_value);
+      }
+    };
+
+    template<typename T>
+    class PromiseRefValue : public PromiseValueBase {
+    private:
+      // NOT take the ownership
+      std::add_pointer_t<T> _pointerValue;
+
+    public:
+      template<typename ValueType>
+      void setValue(ValueType&& v) {
+        static_assert(std::is_reference<ValueType>::value, "given type must be reference type");
+
+        if (_assignGuard.test_and_set()) {
+          // already assigned or is assigning
+          throw std::logic_error("promise duplicated assignments");
+        }
+
+        // store reference type address
+        _pointerValue = &(static_cast<decltype((v))>(v));
+        _hasAssigned = true;
+      }
+
+      template<typename ValueType>
+      ValueType getValue() {
+        static_assert(std::is_reference<ValueType>::value, "given type must be reference type");
+        return static_cast<ValueType>(*_pointerValue);
+      }
+    };
+      
     //
     //  @alias
     //
-    template<typename T> using SharedPromiseValue = std::shared_ptr<PromiseValue<T>>;
+    template<typename T> using SharedPromiseValue = std::shared_ptr<
+      std::conditional_t<std::is_pointer<T>::value,
+                         PromisePointerValue<T>,
+                         std::conditional_t<std::is_reference<T>::value,
+                                            PromiseRefValue<T>,
+                                            PromiseValue<T>>>
+    >;
 
     //
     // fulfill traits

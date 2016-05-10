@@ -30,6 +30,10 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 set(EXECUTABLE_OUTPUT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
+endif()
+
 if(${COVERAGE_REPORT})
   message("-- coverage report turned ON")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
@@ -42,15 +46,23 @@ if(UNIX)
 add_subdirectory(base/ocpp_mixing)
 endif()
 
+add_subdirectory(base/promise2_ref_pointer_types)
+
 add_custom_target(run_test COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/run_test.sh")
 
 if(${COVERAGE_REPORT})
+  set(raw_coverage_file "raw_coverage.info")
   set(coverage_file "coverage.info")
 
   add_custom_command(TARGET run_test 
   					POST_BUILD
-  					COMMAND lcov --directory . --capture --output-file ${coverage_file}
+  					COMMAND lcov --directory . --capture --output-file ${raw_coverage_file}
   					COMMENT "-- collect coverage files...")
+
+  add_custom_command(TARGET run_test 
+          POST_BUILD
+          COMMAND lcov --remove ${raw_coverage_file} 'usr/include/*' 'v1/*' 'src/test/*' --output-file ${coverage_file}
+          COMMENT "-- strip coverage info...")
 
   add_custom_command(TARGET run_test 
   					POST_BUILD
