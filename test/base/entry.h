@@ -9,6 +9,9 @@
 #ifndef ENTRY_H
 #define ENTRY_H
 
+#include <exception>
+#include <atomic>
+
 #include "TestSuite.h"
 
 #ifdef __APPLE__
