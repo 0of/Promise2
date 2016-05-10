@@ -11,6 +11,68 @@
 
 #include "TestSuite.h"
 
+#ifdef __APPLE__
+#include <cstdlib>
+#include <dispatch/dispatch.h>
+
+using TestSpec = LTest::SequentialTestSpec;
+using DefaultContainer = LTest::SequentialTestRunnableContainer;
+
+class UserException : public std::exception {};
+class AssertionFailed : public std::exception {};
+
+class Voidness : public LTest::TestRunable {
+public:
+  virtual void run(LTest::TestRunnableContainer& container) noexcept override {}
+};
+
+class GCDContainer : public DefaultContainer {
+private:
+  std::atomic_int _runningTestCount;
+
+private:
+  using Runnable = std::pair<GCDContainer *, LTest::SharedTestRunnable>;
+
+  static void InvokeRunnable(void *context) {
+    std::unique_ptr<Runnable> runnable{ static_cast<Runnable *>(context) };
+    runnable->second->run(*runnable->first);
+  }
+
+  static void quit(void *) {
+    std::exit(0);
+  }
+
+public:
+  GCDContainer()
+    : _runningTestCount{ 0 } {
+    // DefaultContainer's got something to run with so that it can invoke the `startTheLoop` within `start`
+    DefaultContainer::scheduleToRun(std::make_shared<Voidness>());
+  }
+
+public:
+  virtual void scheduleToRun(const LTest::SharedTestRunnable& runnable) override {
+    dispatch_async_f(dispatch_get_main_queue(), new Runnable{ this, runnable }, InvokeRunnable);
+    ++_runningTestCount;
+  }
+
+  virtual void endRun() override {
+    DefaultContainer::endRun();
+
+    if (--_runningTestCount == 0) {
+        dispatch_async_f(dispatch_get_main_queue(), nullptr, quit);
+    }
+  }
+
+protected:
+  virtual void startTheLoop() override {
+    dispatch_main();
+  }
+};
+# define CONTAINER_TYPE GCDContainer
+#else
+# define CONTAINER_TYPE DefaultContainer
+#endif // __APPLE__
+
 template<typename Spec>
 class SpecInitializer {
 private:
@@ -33,12 +95,6 @@ public:
     appendCases(std::forward<Rest>(rest)...);
   }
 };
-
-using TestSpec = LTest::SequentialTestSpec;
-using DefaultContainer = LTest::SequentialTestRunnableContainer;
-
-class UserException : public std::exception {};
-class AssertionFailed : public std::exception {};
 
 // template function
 #define SPEC_TFN(fn) fn<TestSpec>

@@ -47,12 +47,18 @@ add_subdirectory(base/promise2_ref_pointer_types)
 add_custom_target(run_test COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/run_test.sh")
 
 if(${COVERAGE_REPORT})
+  set(raw_coverage_file "raw_coverage.info")
   set(coverage_file "coverage.info")
 
   add_custom_command(TARGET run_test 
   					POST_BUILD
-  					COMMAND lcov --directory . --capture --output-file ${coverage_file}
+  					COMMAND lcov --directory . --capture --output-file ${raw_coverage_file}
   					COMMENT "-- collect coverage files...")
+
+  add_custom_command(TARGET run_test 
+          POST_BUILD
+          COMMAND lcov --remove ${raw_coverage_file} 'usr/include/*' 'v1/*' 'src/test/*' --output-file ${coverage_file}
+          COMMENT "-- strip coverage info...")
 
   add_custom_command(TARGET run_test 
   					POST_BUILD
