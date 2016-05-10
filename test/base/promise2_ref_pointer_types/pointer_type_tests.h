@@ -8,6 +8,8 @@
 #ifndef POINTER_TYPE_TESTS_H
 #define POINTER_TYPE_TESTS_H
 
+#include <atomic>
+
 #include "entry.h"
 #include "Promise.h"
 
