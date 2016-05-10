@@ -14,15 +14,15 @@
 
 #include "TestSuite.h"
 
-#ifdef __APPLE__
-#include <cstdlib>
-#include <dispatch/dispatch.h>
-
 using TestSpec = LTest::SequentialTestSpec;
 using DefaultContainer = LTest::SequentialTestRunnableContainer;
 
 class UserException : public std::exception {};
 class AssertionFailed : public std::exception {};
+
+#ifdef __APPLE__
+#include <cstdlib>
+#include <dispatch/dispatch.h>
 
 class Voidness : public LTest::TestRunable {
 public:
