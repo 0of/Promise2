@@ -411,6 +411,22 @@ namespace PromiseAPIsBase {
       }
 
       throw AssertionFailed();
+    })
+    /* ==> */
+    .it("should be fulfilled when the void deferred task returned", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<void>::New([](Promise2::PromiseDefer<void>&& deferred) {
+        deferred.setResult();
+      }, CurrentContext::New());
+
+      p.then([=]() {
+        if (!p.isFulfilled())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+      }, [=](std::exception_ptr) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Promise2::Promise<void>::Rejected(std::make_exception_ptr(AssertionFailed()));
+      }, CurrentContext::New());
     });
     // end of the init spec
   }

@@ -86,10 +86,10 @@ namespace Promise2 {
   template<>
   class PromiseDefer<void> {
   private:
-    Details::DeferPromiseCore<void> _core;
+    Details::DeferPromiseCore<Void> _core;
 
   public:
-    PromiseDefer(Details::DeferPromiseCore<void>& core);
+    PromiseDefer(Details::DeferPromiseCore<Void>& core);
 
     PromiseDefer(PromiseDefer<void>&&) = default;
     ~PromiseDefer() = default;
