@@ -49,12 +49,13 @@ namespace Promise2 {
     template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
     class DeferredPromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, IsTask>;
+      using Defer = PromiseDefer<UnboxVoid<ReturnType>>;
 
     private:
-      std::function<void(PromiseDefer<ReturnType>&&, ConvertibleArgType)> _onFulfill;
+      std::function<Void(Defer&&, ConvertibleArgType)> _onFulfill;
 
     public:
-      DeferredPromiseNodeInternal(std::function<void(PromiseDefer<ReturnType>&&, ConvertibleArgType)>&& onFulfill,
+      DeferredPromiseNodeInternal(std::function<Void(Defer&&, ConvertibleArgType)>&& onFulfill,
                   OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
@@ -71,7 +72,7 @@ namespace Promise2 {
             return;
           }
 
-          PromiseDefer<ReturnType> deferred{ Base::_forward };
+          Defer deferred{ Base::_forward };
           // no exception allowed
           _onFulfill(std::move(deferred), Base::template get<ConvertibleArgType>());
         });
