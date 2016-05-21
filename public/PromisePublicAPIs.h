@@ -48,6 +48,8 @@ namespace Promise2 {
   template<typename T> using OnRejectFunction = std::function<Promise<UnboxVoid<T>>(std::exception_ptr)>;
   // !
 
+  template<typename First, typename... Rest> using first_of = First;
+
   //
   // @class ThreadContext
   //
@@ -157,7 +159,7 @@ namespace Promise2 {
 
     template<typename NextT, typename ConvertibleT>
     static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
-                               std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
+                               std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
                                OnRejectFunction<NextT>&& onReject, 
                                ThreadContext* &&context);
 
@@ -192,20 +194,21 @@ namespace Promise2 {
     static auto wrapped(...) -> std::false_type;
   };
 #endif // ONREJECT_IMPLICITLY_RESOLVED
+  
+  template<typename T, typename... _> struct IsKindOfDefer : public std::false_type {};
+  template<typename T, typename... _> struct IsKindOfDefer<PromiseDefer<T>&&, _...> : public std::true_type {};
 
   // void eliminator
   struct VoidEliminator {
     template<typename ReturnType, typename... ArgsType>
-    static auto eliminate(std::function<ReturnType(ArgsType...)>&&);
+    static auto eliminate(std::function<ReturnType(ArgsType...)>&&, std::enable_if_t<!IsKindOfDefer<ArgsType...>::value, Void>);
 
     template<typename ReturnType>
-    static auto eliminate(std::function<ReturnType()>&&);
+    static auto eliminate(std::function<ReturnType()>&&, Void);
 
-    template<typename ReturnType, typename NextT>
-    static auto eliminate(std::function<void(PromiseDefer<NextT>&&)>&&);
-
-    template<typename ReturnType, typename NextT, typename T>
-    static auto eliminate(std::function<void(PromiseDefer<NextT>&&, T)>&&);
+    // deferred promise
+    template<typename ReturnType, typename... ArgsType>
+    static auto eliminate(std::function<ReturnType(ArgsType...)>&&, std::enable_if_t<IsKindOfDefer<ArgsType...>::value, Void>);
   };
 
   //
@@ -248,7 +251,7 @@ namespace Promise2 {
       static_assert(!std::is_same<declfn(onFulfill), std::false_type>::value &&
                     !std::is_same<declfn(onReject), std::false_type>::value , "you need to provide a callable");
 
-      auto onFulfillFn = VoidEliminator::eliminate(declfn(onFulfill){ std::move(onFulfill) });
+      auto onFulfillFn = VoidEliminator::eliminate(declfn(onFulfill){ std::move(onFulfill) }, Void{});
 
 #if ONREJECT_IMPLICITLY_RESOLVED
       auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfill)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
