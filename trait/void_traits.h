@@ -34,7 +34,7 @@ namespace Promise2 {
       template<typename... Args>
       static auto currying(std::function<void(Args...)>&& f) {
         auto fn = [rawFn = std::move(f)](Args... args) {
-          rawFn(std::forward<Args...>(args...));
+          rawFn(std::forward<Args>(args)...);
           return Void{};
         };
 
@@ -79,7 +79,7 @@ namespace Promise2 {
       template<typename ReturnType, typename... Args>
       static auto currying(std::function<ReturnType(Args...)>&& f) {
         auto fn = [rawFn = std::move(f)](Args... args, Void) {
-          return rawFn(std::forward<Args...>(args...));
+          return rawFn(std::forward<Args>(args)...);
         };
 
         return std::function<ReturnType(Args..., Void)>{ std::move(fn) };

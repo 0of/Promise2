@@ -69,7 +69,7 @@ namespace Promise2 {
 #define THEN_IMP(internal, T, ConvertibleT, ArgPred) \
   { static_assert(std::is_convertible<T, ConvertibleT>::value, "implicitly argument type conversion failed"); \
     auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-    auto nextNode = std::make_shared<internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>>>(eliminateVoid<ArgPred>(std::move(onFulfill)), eliminateVoid<ArgPred>(std::move(onReject)), sharedContext); \
+    auto nextNode = std::make_shared<internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>>>(std::move(onFulfill), std::move(onReject), sharedContext); \
     node->chainNext(nextNode, [=]() { \
       auto runnable = std::bind(&Details::PromiseNode<BoxVoid<NextT>>::run, nextNode); \
       sharedContext->scheduleToRun(std::move(runnable)); \
@@ -91,31 +91,26 @@ namespace Promise2 {
     using type = typename VoidTrait::LastType<Args...>::Type;
   };
 
-   // `void` type if last argument type is not equal to given one
-  template<typename GivenArgType>
+   // `void` type if last argument type is equal to given one, which means it should pad an `Void` type to the argument list
+  template<typename GivenArgType, typename...>
   struct GivenArgTypePred {
     template<typename... Args>
-    using type = std::conditional_t<std::is_same<VoidTrait::LastType<Args...>, GivenArgType>::value, GivenArgType, void>;
+    using type = std::conditional_t<std::is_same<VoidTrait::last_of<Args...>, GivenArgType>::value, void, VoidTrait::last_of<Args...>>;
   };
 
   template<typename ReturnType, typename... ArgsType>
-  auto VoidEliminator::eliminate(std::function<ReturnType(ArgsType...)>&& f) {
+  auto VoidEliminator::eliminate(std::function<ReturnType(ArgsType...)>&& f, std::enable_if_t<!IsKindOfDefer<ArgsType...>::value, Void>) {
     return eliminateVoid<ArgTypePred>(std::move(f));
   }
 
   template<typename ReturnType>
-  auto VoidEliminator::eliminate(std::function<ReturnType()>&& f) {
+  auto VoidEliminator::eliminate(std::function<ReturnType()>&& f, Void) {
     return eliminateVoid<ArgTypePred>(std::move(f));
   }
 
-  template<typename ReturnType, typename NextT>
-  auto VoidEliminator::eliminate(std::function<void(PromiseDefer<NextT>&&)>&& f) {
-    return eliminateVoid<GivenArgTypePred<PromiseDefer<NextT>&&>>(std::move(f));
-  }
-
-  template<typename ReturnType, typename NextT, typename T>
-  auto VoidEliminator::eliminate(std::function<void(PromiseDefer<NextT>&&, T)>&& f) {
-    return eliminateVoid<GivenArgTypePred<PromiseDefer<NextT>&&>>(std::move(f));
+  template<typename ReturnType, typename... ArgsType>
+  auto VoidEliminator::eliminate(std::function<ReturnType(ArgsType...)>&& f, std::enable_if_t<IsKindOfDefer<ArgsType...>::value, Void>) {
+    return eliminateVoid<GivenArgTypePred<ArgsType...>>(std::move(f));
   }
 
   template<typename T>
@@ -156,7 +151,7 @@ namespace Promise2 {
   template<typename T>
   template<typename NextT, typename ConvertibleT>
   Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-                             std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
+                             std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
                              OnRejectFunction<NextT>&& onReject,
                              ThreadContext* &&context)
     THEN_IMP(Details::DeferredPromiseNodeInternal, T, ConvertibleT, GivenArgTypePred<PromiseDefer<NextT>&&>)

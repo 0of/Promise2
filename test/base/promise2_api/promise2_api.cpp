@@ -1012,7 +1012,33 @@ namespace OnRejectReturn {
         notifier->fail(std::make_exception_ptr(AssertionFailed()));
         return Promise2::Promise<void>::Resolved();
       }, context::New());
+    })
+    .it("should be rejected when deferred then's previous typed task failed", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<bool>::Rejected(std::make_exception_ptr(UserException()));
+      p.then([=](Promise2::PromiseDefer<void>&& deferred, bool) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        if (!p.isRejected())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+        return Promise2::Promise<void>::Resolved();
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected when void deferred then's previous void task failed", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<void>::Rejected(std::make_exception_ptr(UserException()));
+      p.then([=](Promise2::PromiseDefer<void>&& deferred) {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        if (!p.isRejected())
+          notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        else
+          notifier->done();
+        return Promise2::Promise<void>::Resolved();
+      }, CurrentContext::New());
     });
+    // end of the init spec
   }
 }
 

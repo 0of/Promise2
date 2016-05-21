@@ -55,6 +55,11 @@ if(${COVERAGE_REPORT})
   set(coverage_file "coverage.info")
 
   add_custom_command(TARGET run_test 
+            POST_BUILD
+            COMMAND lcov -z --directory .
+            COMMENT "-- reset coverage state...")
+
+  add_custom_command(TARGET run_test 
   					POST_BUILD
   					COMMAND lcov --directory . --capture --output-file ${raw_coverage_file}
   					COMMENT "-- collect coverage files...")
