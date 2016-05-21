@@ -95,7 +95,7 @@ namespace Promise2 {
   template<typename GivenArgType, typename...>
   struct GivenArgTypePred {
     template<typename... Args>
-    using type = std::conditional_t<std::is_same<VoidTrait::LastType<Args...>, GivenArgType>::value, void, VoidTrait::LastType<Args...>>;
+    using type = std::conditional_t<std::is_same<VoidTrait::last_of<Args...>, GivenArgType>::value, void, VoidTrait::last_of<Args...>>;
   };
 
   template<typename ReturnType, typename... ArgsType>
