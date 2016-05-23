@@ -4,6 +4,7 @@ general:
 machine:
   pre:
     - gem install coveralls-lcov
+    - sudo apt-get update
     - sudo apt-get install --fix-missing gcc-5 g++-5 libobjc2 gobjc++-5 gnustep-devel libdispatch-dev lcov
     - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 50
 
