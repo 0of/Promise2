@@ -33,15 +33,14 @@ namespace Promise2 {
     public:
       virtual void run() override {
        	std::call_once(Base::_called, [this]() {
-          Promise<ReturnType> wrapped;
-
-          try {
+           try {
             Base::guard();
-            wrapped = std::move(_onFulfill(Base::template get<ConvertibleArgType>()));
           } catch (...) {
-            wrapped = std::move(Promise<UnboxVoid<ReturnType>>::Rejected(std::current_exception()));
+            Base::runReject();
+            return;
           }
 
+          auto wrapped = std::move(_onFulfill(Base::template get<ConvertibleArgType>()));
           wrapped.internal()->chainNext(Base::_forward);
       	});
       }
