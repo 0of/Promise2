@@ -30,19 +30,14 @@ namespace Promise2 {
         , _onFulfill{ std::move(onFulfill) }
       {}
 
-    public:
-      virtual void run() override {
-       	std::call_once(Base::_called, [this]() {
-           try {
-            Base::guard();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
-
+    protected:
+      virtual void onRun() noexcept override {
+        try {
           auto wrapped = std::move(_onFulfill(Base::template get<ConvertibleArgType>()));
           wrapped.internal()->chainNext(Base::_forward);
-      	});
+        } catch (...) {
+          Base::_forward->reject(std::current_exception());
+        }
       }
     };  
 	} // Details

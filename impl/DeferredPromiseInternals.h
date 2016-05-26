@@ -62,20 +62,15 @@ namespace Promise2 {
         , _onFulfill{ std::move(onFulfill) }
       {}
 
-    public:
-      virtual void run() noexcept override {
-        std::call_once(Base::_called, [this]() {
-          try {
-            Base::guard();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
-
-          Defer deferred{ Base::_forward };
+    protected:
+      virtual void onRun() noexcept override {
+        try {
+           Defer deferred{ Base::_forward };
           // no exception allowed
           _onFulfill(std::move(deferred), Base::template get<ConvertibleArgType>());
-        });
+        } catch (...) {
+          Base::_forward->reject(std::current_exception());
+        }
       }
     };
   }

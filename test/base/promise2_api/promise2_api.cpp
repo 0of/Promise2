@@ -1065,6 +1065,46 @@ namespace OnRejectReturn {
           notifier->done();
         return Promise2::Promise<void>::Resolved();
       }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected when void nesting throw exception", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<void>::New([=] {
+        throw UserException();
+        return Promise2::Promise<void>::Resolved();
+      }, CurrentContext::New());
+
+      p.then([=]() {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        notifier->done();
+        return Promise2::Promise<void>::Resolved();
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected when void deferred throw exception", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<void>::New([=](Promise2::PromiseDefer<void>&& deferred) {
+        throw UserException();
+      }, CurrentContext::New());
+
+      p.then([=]() {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        notifier->done();
+        return Promise2::Promise<void>::Resolved();
+      }, CurrentContext::New());
+    })
+    /* ==> */
+    .it("should be rejected when void deferred set exception", [](const LTest::SharedCaseEndNotifier& notifier) {
+      auto p = Promise2::Promise<void>::New([=](Promise2::PromiseDefer<void>&& deferred) {
+        deferred.setException(std::make_exception_ptr(AssertionFailed()));
+      }, CurrentContext::New());
+
+      p.then([=]() {
+        notifier->fail(std::make_exception_ptr(AssertionFailed()));
+      }, [=](std::exception_ptr) {
+        notifier->done();
+        return Promise2::Promise<void>::Resolved();
+      }, CurrentContext::New());
     });
     // end of the init spec
   }

@@ -371,6 +371,8 @@ namespace Promise2 {
       std::shared_ptr<ThreadContext> _context;
 
       OnRejectFunction<ReturnType> _onReject;
+
+    private:
       std::once_flag _called;
 
     public:
@@ -402,6 +404,21 @@ namespace Promise2 {
       }
 
     protected:
+      virtual void run() override final {
+        std::call_once(_called, [this]() {
+          try {
+            this->guard();
+          } catch (...) {
+            this->runReject();
+            return;
+          }
+
+          this->onRun();
+        });
+      }
+
+      virtual void onRun() noexcept {}
+
       // called when exception has been thrown
       void runReject() noexcept {
         if (_onReject) {
@@ -439,25 +456,15 @@ namespace Promise2 {
         , _onFulfill{ std::move(onFulfill) }
       {}
 
-    public:
-      virtual void run() override {
-        std::call_once(Base::_called, [this]() {
-          try {
-            Base::guard();
-          } catch (...) {
-            Base::runReject();
-            return;
-          }
-
-          try {
-            Base::_forward->fulfill(
-              _onFulfill(Base::template get<ConvertibleArgType>())
-            );
-          } catch (...) {
-            // previous task is failed
-            Base::runReject();
-          }
-        });
+    protected:
+      virtual void onRun() noexcept override {
+        try {
+          Base::_forward->fulfill(
+            _onFulfill(Base::template get<ConvertibleArgType>())
+          );
+        } catch (...) {
+          Base::_forward->reject(std::current_exception());
+        }
       }
     }; 
   // end of details
