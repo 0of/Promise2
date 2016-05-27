@@ -8,25 +8,7 @@
 #ifndef POINTER_TYPE_TESTS_H
 #define POINTER_TYPE_TESTS_H
 
-#include <atomic>
-
-#include "entry.h"
-#include "Promise.h"
-
-class CurrentContext : public Promise2::ThreadContext {
-public:
-  static ThreadContext *New() {
-    return new CurrentContext;
-  }
-
-public:
-  virtual void scheduleToRun(std::function<void()>&& task) override {
-    task(); 
-  }
-};
-
-// type alias
-using AsyncTestCaseNotifier = LTest::SharedCaseEndNotifier;
+#include "common.h"
 
 namespace PointerTypeBase {
   template<typename T>

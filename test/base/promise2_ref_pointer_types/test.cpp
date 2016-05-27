@@ -7,5 +7,6 @@
  */
 
 #include "pointer_type_tests.h"
+#include "ref_type_tests.h"
 
-TEST_ENTRY(CONTAINER_TYPE, SPEC_TFN(PointerTypeBase::init));
+TEST_ENTRY(CONTAINER_TYPE, SPEC_TFN(PointerTypeBase::init), SPEC_TFN(RefTypeBase::init));
