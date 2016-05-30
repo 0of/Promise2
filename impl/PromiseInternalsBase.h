@@ -4,9 +4,9 @@
 #include <thread>
 #include <memory>
 #include <future>
-#include <atomic>
-#include <exception>
 #include <type_traits>
+
+#include "value/PromiseValueBase.h"
 
 namespace Promise2 {
   namespace Details {
@@ -37,65 +37,6 @@ namespace Promise2 {
     public:
       virtual bool isFulfilled() const = 0;
       virtual bool isRejected() const = 0;
-    };
-
-    class PromiseValueBase {
-    protected:
-      std::exception_ptr _exception;
-
-      std::atomic_flag _assignGuard;
-      std::atomic_bool _hasAssigned;
-
-    protected:
-      PromiseValueBase()
-        : _exception{ nullptr }
-        , _assignGuard{ ATOMIC_FLAG_INIT }
-        , _hasAssigned{ false }
-      {}
-
-    public:
-      void setException(std::exception_ptr e) {
-        if (_assignGuard.test_and_set()) {
-          // already assigned or is assigning
-          throw std::logic_error("promise duplicated assignments");
-        }
-
-        _exception = e;
-        _hasAssigned = true;
-      }
-
-    public:
-      //
-      // access guard must be invoked before directly access the `value` 
-      // check the assigned flag and make sure no exception has been thrown
-      //
-      void accessGuard() {
-        if (!_hasAssigned) {
-          throw std::logic_error("promise invalid state");
-        }
-
-        if (_exception) {
-          std::rethrow_exception(_exception);
-        }
-      }
-
-    public:
-      std::exception_ptr fetchException() const {
-        return _exception;
-      }
-
-    public:
-      bool hasAssigned() const {
-        return _hasAssigned;
-      }
-
-      bool isExceptionCase() const {
-        return nullptr != _exception;
-      }
-
-    private:
-      PromiseValueBase(const PromiseValueBase&) = delete;
-      PromiseValueBase(const PromiseValueBase&&) = delete;
     };
 
     template<typename T>
