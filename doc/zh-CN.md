@@ -6,6 +6,9 @@
 
 c++14 标准跨平台实现 `Promise`
 
+## Promise 核心概念
+`Promise` 表达的是一种满足承诺的语义，并提供了一种机制，能在异步任务处理结束后，传达对应的结果或是异常。每一个 `promise` 都与一个 `ThreadContext` 绑定，意味着该异步任务运行在这种上下文中。
+
 # 特性
 - 定义清晰，使用简单
 - 易于适配，平台制定
@@ -60,9 +63,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 - GCD thread context
 - Win32 thread context
 - STL thread context
-
-## Promise\<T\>
-`Promise` 表达的是一种满足承诺的语义，并提供了一种机制，能在异步任务处理结束后，传达对应的结果或是异常。每一个 `promise` 都与一个 `ThreadContext` 绑定，意味着该异步任务运行在这种上下文中。
 
 # 使用指南
 ## 创建 `Promise` 实例
