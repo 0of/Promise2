@@ -8,6 +8,13 @@ c++14 compliant cross-platform implementations of promise
 
 [中文文档](https://github.com/0of/Promise2/blob/master/doc/zh-CN.md)
 
+## Core concept
+`Promise` provides a kind of mechanism to acquire the result which is type of the given `T` (voidness with `T == void`) or throw an exception later asynchronously. And each `Promise` should be bound to a `ThreadContext`, which means fulfill or reject the promise within specific context. `ThreadContext` will schedule either `fulfill` or `reject` both methods are passing to `Promise` to run asynchronously or synchronously under different situations.
+
+`ThreadContext` represents the state of the running or pre-running thread and it has the ability to instruct the thread to schedule the task
+
+> I recommend you to get familiar with [`Javascript Promise`](https://www.promisejs.org) though two totally different implementations and usages.
+
 # Features
 - simple API definitions and quite easy to use
 - great extensibility and platform customized message deliver delegate
@@ -51,23 +58,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 - VS2015
 
 # Concept
-## ThreadContext
-`ThreadContext` represents the state of the running or pre-running thread and it has the ability to instruct the thread to schedule the task
-
-### Tips when you implement your own `ThreadContext`
-- **When promise is fulfilled or rejected, the associated `ThreadContext` will be destroyed automatically**
-- **Do NOT ignore the task and you should invoke it somewhere in your code once otherwise the promise chain will stop to propagate its state**
-
-### Default implemented `ThreadContext`
-- GCD thread context
-- Win32 thread context
-- STL thread context
-
-## Promise\<T\>
-`Promise` provides a kind of mechanism to acquire the result which is type of the given `T` (voidness with `T == void`) or throw an exception later asynchronously. And each `Promise` should be bound to a `ThreadContext`, which means fulfill or reject the promise within specific context. `ThreadContext` will schedule either `fulfill` or `reject` both methods are passing to `Promise` to run asynchronously or synchronously under different situations.
-
-> I recommend you to get familiar with [`Javascript Promise`](https://www.promisejs.org) though two totally different implementations and usages.
-
 ### Synchronous promise
 The promise is resolved by an instance of the given type `T` or rejected by an exception as soon as the `fulfill` or `reject` [callables](http://en.cppreference.com/w/cpp/concept/Callable) returned.
 
@@ -100,6 +90,10 @@ Promise<std::string>::New([[](PromiseDefer<std::string>&& defer){
 The nesting promise, returned from given `fulfill` callable, resolves or rejects the outter one.
 
 # Usage Guidelines
+## Tips when you implement your own `ThreadContext`
+- **When promise is fulfilled or rejected, the associated `ThreadContext` will be destroyed automatically**
+- **Do NOT ignore the task and you should invoke it somewhere in your code once otherwise the promise chain will stop to propagate its state**
+
 ## Create a new promise
 ```c++
 using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
@@ -237,7 +231,7 @@ try {
 }
 ```
 
-### Working with Objective-c++
+## Working with Objective-c++
 - enable ARC(**add compiler option `-fobjc-arc` if not using Xcode**)
 - use `.mm` as your implement file extension
 - decorate `__block` keyword to c++ instance when using with objc block
@@ -252,6 +246,11 @@ Promise2::Promise<BOOL>::Resolved(YES).then(^(BOOL fulfilled) {
   return Promise2::Promise<void>::Rejected(e);
 }, MainThreadContext::New());
 ```
+
+## Default implemented `ThreadContext`
+- GCD thread context
+- Win32 thread context
+- STL thread context
 
 # TODOs
 - test cases
