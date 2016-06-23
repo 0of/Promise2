@@ -173,6 +173,16 @@ namespace Promise2 {
     template<typename NonMatching> static auto Then(...) -> std::false_type;
   };
 
+  // allow recursion resolving
+  template<typename T>
+  class PromiseRecursible {
+  public:
+    // iterator must implements std::input_iterator_tag supported operations
+    // and under multi-threads context(recursion state pass to the receiver i.e. thenable promise) equality check and increment operation must be atomic
+    template<class InputIterator>
+    static Promise<T> Iterate(InputIterator begin, InputIterator end);
+  };
+
 #if ONREJECT_IMPLICITLY_RESOLVED
   template<typename T>
   struct OnRejectImplicitlyResolved {
