@@ -47,6 +47,47 @@ namespace Promise2 {
     >;
 
     //
+    // fulfillment
+    //  SharedPromiseValue wrapper
+    //
+    template<typename FulfillArgType, typename IsTask>
+    class Fulfillment {
+    private:
+      SharedPromiseValue<FulfillArgType> _previousPromise;
+
+    public:
+      Fulfillment()
+        : _previousPromise{}
+      {}
+
+      ~Fulfillment() = default;
+
+    public:
+      void guard() {
+        if (!_previousPromise) {
+          throw std::logic_error("null promise value");
+        }
+
+        _previousPromise->accessGuard();
+      }
+
+      template<typename T>
+      inline T get() {
+        return std::forward<T>(_previousPromise->template getValue<T>());
+      }
+    };
+
+    template<typename FulfillArgType>
+    class Fulfillment<FulfillArgType, std::true_type> {
+    public:
+      void guard() {}
+
+      inline Void get() {
+        return Void{};
+      }
+    };
+
+    //
     // fulfill traits
     //
     template<typename FulfillArgType, typename IsTask>
@@ -275,7 +316,7 @@ namespace Promise2 {
           this->onRun();
         });
       }
-
+      
     protected:
       virtual void onRun() noexcept {}
 
