@@ -56,8 +56,8 @@ namespace Promise2 {
       SharedPromiseValue<FulfillArgType> _previousPromise;
 
     public:
-      Fulfillment()
-        : _previousPromise{}
+      Fulfillment(const SharedPromiseValue<FulfillArgType>& v)
+        : _previousPromise{ v }
       {}
 
       ~Fulfillment() = default;
@@ -80,9 +80,13 @@ namespace Promise2 {
     template<typename FulfillArgType>
     class Fulfillment<FulfillArgType, std::true_type> {
     public:
+      Fulfillment(const SharedPromiseValue<FulfillArgType>& _)
+      {}
+
       void guard() {}
 
-      inline Void get() {
+      template<typename T>
+      inline T get() {
         return Void{};
       }
     };
@@ -316,9 +320,28 @@ namespace Promise2 {
           this->onRun();
         });
       }
-      
+
+      void runWith(const SharedPromiseValue<ArgType>& value) {
+        Fulfillment<ArgType, IsTask> fulfillment { value };
+        try {
+          fulfillment.guard();
+        } catch (...) {
+          this->runReject();
+          return;
+        }
+
+        this->onRun(fulfillment);
+      }
+
+      // start as task
+      //  if non task call this function, guard() will throw logic exception
+      void start() {
+        this->run(nullptr);
+      }
+
     protected:
       virtual void onRun() noexcept {}
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
 
       // called when exception has been thrown
       void runReject() noexcept {
@@ -362,6 +385,16 @@ namespace Promise2 {
         try {
           Base::_forward->fulfill(
             _onFulfill(Base::template get<ConvertibleArgType>())
+          );
+        } catch (...) {
+          Base::_forward->reject(std::current_exception());
+        }
+      }
+
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
+        try {
+          Base::_forward->fulfill(
+            _onFulfill(fulfillment.template get<ConvertibleArgType>())
           );
         } catch (...) {
           Base::_forward->reject(std::current_exception());
