@@ -26,10 +26,6 @@ namespace Promise2 {
       virtual ~PromiseNode() = default;
 
     public:
-      // run the current task under current context
-      virtual void run() = 0;
-
-    public:
       virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
       // proxy fowarding
       virtual void chainNext(const DeferPromiseCore<T>&) = 0;
@@ -266,8 +262,8 @@ namespace Promise2 {
         return _forward->isRejected();
       }
 
-    protected:
-      virtual void run() override final {
+    public:
+      void run() {
         std::call_once(_called, [this]() {
           try {
             this->guard();
@@ -280,6 +276,7 @@ namespace Promise2 {
         });
       }
 
+    protected:
       virtual void onRun() noexcept {}
 
       // called when exception has been thrown
