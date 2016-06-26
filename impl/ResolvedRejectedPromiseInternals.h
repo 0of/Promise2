@@ -36,7 +36,7 @@ namespace Promise2 {
       }
 
     public:
-      virtual void run() override {}
+      void run() {}
 
       virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
         fulfill->attach(_promiseValue);

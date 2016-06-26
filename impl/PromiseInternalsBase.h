@@ -26,10 +26,6 @@ namespace Promise2 {
       virtual ~PromiseNode() = default;
 
     public:
-      // run the current task under current context
-      virtual void run() = 0;
-
-    public:
       virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
       // proxy fowarding
       virtual void chainNext(const DeferPromiseCore<T>&) = 0;
@@ -49,6 +45,51 @@ namespace Promise2 {
                                             PromiseRefValue<T>,
                                             PromiseValue<T>>>
     >;
+
+    //
+    // fulfillment
+    //  SharedPromiseValue wrapper
+    //
+    template<typename FulfillArgType, typename IsTask>
+    class Fulfillment {
+    private:
+      SharedPromiseValue<FulfillArgType> _previousPromise;
+
+    public:
+      Fulfillment(const SharedPromiseValue<FulfillArgType>& v)
+        : _previousPromise{ v }
+      {}
+
+      ~Fulfillment() = default;
+
+    public:
+      void guard() {
+        if (!_previousPromise) {
+          throw std::logic_error("null promise value");
+        }
+
+        _previousPromise->accessGuard();
+      }
+
+      template<typename T>
+      inline T get() {
+        return std::forward<T>(_previousPromise->template getValue<T>());
+      }
+    };
+
+    template<typename FulfillArgType>
+    class Fulfillment<FulfillArgType, std::true_type> {
+    public:
+      Fulfillment(const SharedPromiseValue<FulfillArgType>& _)
+      {}
+
+      void guard() {}
+
+      template<typename T>
+      inline T get() {
+        return Void{};
+      }
+    };
 
     //
     // fulfill traits
@@ -266,8 +307,8 @@ namespace Promise2 {
         return _forward->isRejected();
       }
 
-    protected:
-      virtual void run() override final {
+    public:
+      void run() {
         std::call_once(_called, [this]() {
           try {
             this->guard();
@@ -280,7 +321,27 @@ namespace Promise2 {
         });
       }
 
+      void runWith(const SharedPromiseValue<ArgType>& value) {
+        Fulfillment<ArgType, IsTask> fulfillment { value };
+        try {
+          fulfillment.guard();
+        } catch (...) {
+          this->runReject();
+          return;
+        }
+
+        this->onRun(fulfillment);
+      }
+
+      // start as task
+      //  if non task call this function, guard() will throw logic exception
+      void start() {
+        this->run(nullptr);
+      }
+
+    protected:
       virtual void onRun() noexcept {}
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
 
       // called when exception has been thrown
       void runReject() noexcept {
@@ -324,6 +385,16 @@ namespace Promise2 {
         try {
           Base::_forward->fulfill(
             _onFulfill(Base::template get<ConvertibleArgType>())
+          );
+        } catch (...) {
+          Base::_forward->reject(std::current_exception());
+        }
+      }
+
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
+        try {
+          Base::_forward->fulfill(
+            _onFulfill(fulfillment.template get<ConvertibleArgType>())
           );
         } catch (...) {
           Base::_forward->reject(std::current_exception());

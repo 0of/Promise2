@@ -56,11 +56,12 @@ namespace Promise2 {
  * Implementations
  */
 #define NEW_IMP(internal, ArgPred) \
-   { Promise<T> spawned; \
+   { using Internal = internal<BoxVoid<T>, Void, Void, std::true_type>; \
+   Promise<T> spawned; \
    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-   auto node = std::make_shared<internal<BoxVoid<T>, Void, Void, std::true_type>>(eliminateVoid<ArgPred>(std::move(task)), \
+   auto node = std::make_shared<Internal>(eliminateVoid<ArgPred>(std::move(task)), \
                   std::function<Promise<T>(std::exception_ptr)>(), sharedContext); \
-   auto runnable = std::bind(&Details::PromiseNode<BoxVoid<T>>::run, node); \
+   auto runnable = std::bind(&Internal::run, node); \
    sharedContext->scheduleToRun(std::move(runnable)); \
    \
    spawned._node = node; \
@@ -68,10 +69,11 @@ namespace Promise2 {
 
 #define THEN_IMP(internal, T, ConvertibleT, ArgPred) \
   { static_assert(std::is_convertible<T, ConvertibleT>::value, "implicitly argument type conversion failed"); \
+    using Internal = internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>>; \
     auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
-    auto nextNode = std::make_shared<internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>>>(std::move(onFulfill), std::move(onReject), sharedContext); \
+    auto nextNode = std::make_shared<Internal>(std::move(onFulfill), std::move(onReject), sharedContext); \
     node->chainNext(nextNode, [=]() { \
-      auto runnable = std::bind(&Details::PromiseNode<BoxVoid<NextT>>::run, nextNode); \
+      auto runnable = std::bind(&Internal::run, nextNode); \
       sharedContext->scheduleToRun(std::move(runnable)); \
     }); \
     \
