@@ -39,6 +39,15 @@ namespace Promise2 {
           Base::_forward->reject(std::current_exception());
         }
       }
+
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
+        try {
+          auto wrapped = std::move(_onFulfill(fulfillment.template get<ConvertibleArgType>()));
+          wrapped.internal()->chainNext(Base::_forward);
+        } catch (...) {
+          Base::_forward->reject(std::current_exception());
+        }
+      }
     };  
 	} // Details
 }
