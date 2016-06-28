@@ -56,6 +56,11 @@ namespace Promise2 {
         }
       }
 
+      virtual void chainNext(std::function<void(const SharedPromiseValue<ReturnTypeq>&)>&& notify) override {
+        // directly notify the receiver
+        notify(_promiseValue);
+      }
+
     public:
       virtual bool isFulfilled() const override {
         return _promiseValue->hasAssigned() && !_promiseValue->isExceptionCase();

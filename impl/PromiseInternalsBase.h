@@ -18,24 +18,6 @@ namespace Promise2 {
     using SharedNonTaskFulfill = std::shared_ptr<Fulfill<FulfillArgType, std::false_type>>;
 
     //
-    // each `Promise` will hold one shared `PromiseNode`
-    //
-    template<typename T>
-    class PromiseNode {
-    public:
-      virtual ~PromiseNode() = default;
-
-    public:
-      virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
-      // proxy fowarding
-      virtual void chainNext(const DeferPromiseCore<T>&) = 0;
-
-    public:
-      virtual bool isFulfilled() const = 0;
-      virtual bool isRejected() const = 0;
-    };
-
-    //
     //  @alias
     //
     template<typename T> using SharedPromiseValue = std::shared_ptr<
@@ -45,6 +27,26 @@ namespace Promise2 {
                                             PromiseRefValue<T>,
                                             PromiseValue<T>>>
     >;
+
+    //
+    // each `Promise` will hold one shared `PromiseNode`
+    //
+    template<typename T>
+    class PromiseNode {
+    public:
+      virtual ~PromiseNode() = default;
+
+    public:
+      virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
+      
+      virtual void chainNext(std::function<void(const SharedPromiseValue<T>&)>&& notify) = 0;
+      // proxy fowarding
+      virtual void chainNext(const DeferPromiseCore<T>&) = 0;
+
+    public:
+      virtual bool isFulfilled() const = 0;
+      virtual bool isRejected() const = 0;
+    };
 
     //
     // fulfillment
@@ -168,6 +170,7 @@ namespace Promise2 {
       SharedPromiseValue<ForwardType> _promise;
 
       std::function<void()> _notify;
+      std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
       std::atomic_flag _chainingGuard;
       std::atomic_bool _hasChained;
@@ -235,6 +238,26 @@ namespace Promise2 {
         }
       }
 
+      void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
+        if (_chainingGuard.test_and_set()) {
+          // already chained or is chaining
+          throw std::logic_error("promise duplicated chainings");
+        }
+
+        try {
+          // noexcept
+          _forwardNotify = std::move(notify);
+
+        } catch (const std::exception& e) {
+          // something goes wrong
+          // clean the guard flag
+          _chainingGuard.clear();
+          throw e;
+        }
+       
+        _hasChained = true;
+      }
+
       template<typename T>
       void fulfill(T&& value) {
         _promise->setValue(std::forward<T>(value));
@@ -296,6 +319,10 @@ namespace Promise2 {
 
       virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
         _forward->doChaining(nextForward);
+      }
+
+      virtual void chainNext(std::function<void(const SharedPromiseValue<ReturnType>&)>&& notify) override {
+        _forward->doChaining(std::move(notify));
       }
 
     public:
