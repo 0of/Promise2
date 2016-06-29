@@ -56,7 +56,7 @@ namespace Promise2 {
         }
       }
 
-      virtual void chainNext(std::function<void(const SharedPromiseValue<ReturnTypeq>&)>&& notify) override {
+      virtual void chainNext(std::function<void(const SharedPromiseValue<ReturnType>&)>&& notify) override {
         // directly notify the receiver
         notify(_promiseValue);
       }
