@@ -37,8 +37,6 @@ namespace Promise2 {
       virtual ~PromiseNode() = default;
 
     public:
-      virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
-      
       virtual void chainNext(std::function<void(const SharedPromiseValue<T>&)>&& notify) = 0;
       // proxy fowarding
       virtual void chainNext(const DeferPromiseCore<T>&) = 0;
@@ -198,35 +196,6 @@ namespace Promise2 {
       }
 
     public:
-      void doChaining(const SharedNonTaskFulfill<ForwardType>& fulfill, std::function<void()>&& notify) {
-#ifdef DEBUG
-        if (_chainingGuard.test_and_set()) {
-          // already chained or is chaining
-          throw std::logic_error("promise duplicated chainings");
-        }
-#endif // DEBUG
-
-        try {
-
-          fulfill->attach(_promise);
-
-          // update notifier
-          _notify = std::move(notify);
-
-        } catch (const std::exception& e) {
-          // something goes wrong
-          // clean the guard flag
-          throw e;
-        }
-        
-        _hasChained = true;
-
-        // if already finished notify the next node now
-        if (_promise->hasAssigned()) {
-          _notify();
-        }
-      }
-
       void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
 #ifdef DEBUG
         if (_chainingGuard.test_and_set()) {
@@ -376,10 +345,6 @@ namespace Promise2 {
       {}
 
     public:
-      virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
-        _forward->doChaining(fulfill, std::move(notify));
-      }
-
       virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
         _forward->doChaining(nextForward);
       }
