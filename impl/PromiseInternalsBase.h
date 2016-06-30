@@ -165,9 +165,13 @@ namespace Promise2 {
     template<typename ForwardType>
     class Forward {
     private:
-      SharedPromiseValue<ForwardType> _promise;
+      enum class Status : std::uint8_t {
+        Running = 0,
+        Fulfilled = 1,
+        Rejected = 2
+      };
 
-      std::function<void()> _notify;
+    private:
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
 #ifdef DEBUG
@@ -178,15 +182,17 @@ namespace Promise2 {
 
       std::atomic<SharedPromiseValue<ForwardType> *> _aboutToForwardValue;
 
+      Status _status;
+
     public:
       Forward()
-        : _promise{ std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>() }
+        : _forwardNotify{}
 #ifdef DEBUG
         , _chainingGuard{ ATOMIC_FLAG_INIT }
 #endif // DEBUG
         , _hasChained{ false }
-        , _forwardNotify{}
         , _aboutToForwardValue{ new SharedPromiseValue<ForwardType>{ std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>() } }
+        , _status { Status::Running }
       {}
       ~Forward() {
         auto value = _aboutToForwardValue.exchange(nullptr);
@@ -245,6 +251,10 @@ namespace Promise2 {
           auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
           sharedValue->setValue(std::forward<T>(value));
 
+          _status = Status::Fulfilled;
+
+          std::atomic_thread_fence(std::memory_order_acquire);
+
           _forwardNotify(sharedValue);
 
         } else {
@@ -254,6 +264,8 @@ namespace Promise2 {
 
           // exchange back to prevous value cuz `doChaining` may be waiting for the condition desperately
           _aboutToForwardValue.exchange(prevValue);
+
+          _status = Status::Fulfilled;
         }
       }
         
@@ -268,6 +280,10 @@ namespace Promise2 {
           auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
           sharedValue->setException(exception);
 
+          _status = Status::Rejected;
+
+          std::atomic_thread_fence(std::memory_order_acquire);
+
           _forwardNotify(sharedValue);
 
         } else {
@@ -277,6 +293,8 @@ namespace Promise2 {
 
           // exchange back to prevous value cuz `doChaining` may be waiting for the condition desperately
           _aboutToForwardValue.exchange(prevValue);
+
+          _status = Status::Rejected;
         }
       }
 
@@ -285,11 +303,11 @@ namespace Promise2 {
       }
 
       bool isFulfilled() const {
-        return _promise->hasAssigned() && !_promise->isExceptionCase();
+        return _status == Status::Fulfilled;
       }
 
       bool isRejected() const {
-        return _promise->hasAssigned() && _promise->isExceptionCase();
+        return _status == Status::Rejected;
       }
 
     private:
