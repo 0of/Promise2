@@ -22,7 +22,7 @@ addons:
      - libdispatch-dev
 
 before_install:
-  - sudo apt-get update -q
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update -q; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install --with-clang llvm38; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install lcov; fi
