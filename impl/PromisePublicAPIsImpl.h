@@ -61,7 +61,7 @@ namespace Promise2 {
    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
    auto node = std::make_shared<Internal>(eliminateVoid<ArgPred>(std::move(task)), \
                   std::function<Promise<T>(std::exception_ptr)>(), sharedContext); \
-   auto runnable = std::bind(&Internal::run, node); \
+   auto runnable = std::bind(&Internal::start, node); \
    sharedContext->scheduleToRun(std::move(runnable)); \
    \
    spawned._node = node; \
@@ -72,8 +72,8 @@ namespace Promise2 {
     using Internal = internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>>; \
     auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
     auto nextNode = std::make_shared<Internal>(std::move(onFulfill), std::move(onReject), sharedContext); \
-    node->chainNext(nextNode, [=]() { \
-      auto runnable = std::bind(&Internal::run, nextNode); \
+    node->chainNext([=](const Details::SharedPromiseValue<BoxVoid<T>>& v) { \
+      auto runnable = std::bind(&Internal::runWith, nextNode, v); \
       sharedContext->scheduleToRun(std::move(runnable)); \
     }); \
     \
