@@ -84,18 +84,22 @@ namespace Promise2 {
       }
     };
 
+    enum class Status : std::uint8_t {
+      Running = 0,
+      Fulfilled = 1,
+      Rejected = 2
+    };
+
+    enum class ChainedFlag : std::uint8_t {
+      No = 0,
+      Yes = 1
+    };
+
     //
     // forward traits
     //
     template<typename ForwardType>
     class Forward {
-    private:
-      enum class Status : std::uint8_t {
-        Running = 0,
-        Fulfilled = 1,
-        Rejected = 2
-      };
-
     private:
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
@@ -103,9 +107,8 @@ namespace Promise2 {
       std::atomic_flag _chainingGuard;
 #endif // DEBUG
 
-      std::atomic_bool _hasChained;
-
-      std::atomic<SharedPromiseValue<ForwardType> *> _aboutToForwardValue;
+      std::atomic<ChainedFlag> _chainedFlag;
+      SharedPromiseValue<ForwardType> *_aboutToForwardValue;
 
       Status _status;
 
@@ -115,14 +118,15 @@ namespace Promise2 {
 #ifdef DEBUG
         , _chainingGuard{ ATOMIC_FLAG_INIT }
 #endif // DEBUG
-        , _hasChained{ false }
-        , _aboutToForwardValue{ new SharedPromiseValue<ForwardType>{ std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>() } }
+        , _chainedFlag{ ChainedFlag::No }
+        , _aboutToForwardValue{ nullptr }
         , _status { Status::Running }
       {}
       ~Forward() {
-        auto value = _aboutToForwardValue.exchange(nullptr);
-        if (value) {
-          delete value;
+        if (_chainedFlag.load() == ChainedFlag::No) {
+          if (_aboutToForwardValue) {
+            delete _aboutToForwardValue;
+          }
         }
       }
 
@@ -167,11 +171,11 @@ namespace Promise2 {
 
       template<typename T>
       void fulfill(T&& value) {
-        // acquire
-        auto prevValue = _aboutToForwardValue.exchange(nullptr);
+        // acquire ownership
+        auto preFlag = _chainedFlag.exchange(ChainedFlag::Yes);
 
-        // previous value has been assigned as null, which means already chained
-        if (!prevValue) {
+        // already chained
+        if (ChainedFlag::Yes == preFlag) {
           // just fire the notification with forward notifier
           auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
           sharedValue->setValue(std::forward<T>(value));
@@ -185,22 +189,24 @@ namespace Promise2 {
         } else {
           // epoch before chained
           // store the value for future notification
-          (*prevValue)->setValue(std::forward<T>(value));
+          auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+          sharedValue->setValue(std::forward<T>(value));
 
-          // exchange back to prevous value cuz `doChaining` may be waiting for the condition desperately
-          _aboutToForwardValue.exchange(prevValue);
+          _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+
+          // exchange back to prevous flag cuz `doChaining` may be waiting for the condition desperately
+          _chainedFlag.store(ChainedFlag::No);
 
           _status = Status::Fulfilled;
         }
       }
         
       void reject(std::exception_ptr exception) {
+        // acquire ownership
+        auto preFlag = _chainedFlag.exchange(ChainedFlag::Yes);
 
-         // acquire
-        auto prevValue = _aboutToForwardValue.exchange(nullptr);
-
-        // previous value has been assigned as null, which means already chained
-        if (!prevValue) {
+        // already chained
+        if (ChainedFlag::Yes == preFlag) {
           // just fire the notification with forward notifier
           auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
           sharedValue->setException(exception);
@@ -214,17 +220,20 @@ namespace Promise2 {
         } else {
           // epoch before chained
           // store the value for future notification
-          (*prevValue)->setException(exception);
+          auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+          sharedValue->setException(exception);
 
-          // exchange back to prevous value cuz `doChaining` may be waiting for the condition desperately
-          _aboutToForwardValue.exchange(prevValue);
+          _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+
+          // exchange back to prevous flag cuz `doChaining` may be waiting for the condition desperately
+          _chainedFlag.store(ChainedFlag::No);
 
           _status = Status::Rejected;
         }
       }
 
       bool hasChained() const {
-        return _hasChained;
+        return _chainedFlag.load();
       }
 
       bool isFulfilled() const {
@@ -239,23 +248,25 @@ namespace Promise2 {
       // thread safe chaining
       void chaining() {
         while (true) {
-          // acquire only if not null
-          auto prevValue = _aboutToForwardValue.exchange(nullptr);
+          // acquire only if is `no` flag
+          auto preFlag = _chainedFlag.exchange(ChainedFlag::Yes);
 
           // means `fulfill/reject` has acquired ownership
-          if (!prevValue) {
+          if (ChainedFlag::Yes == preFlag) {
             std::this_thread::yield();
             continue;
           }
 
           // ownership acquired 
           // notify with previously stored value
-          if ((*prevValue)->hasAssigned()) {
-            _forwardNotify(*prevValue);
-          }
+          if (_aboutToForwardValue) {
+            _forwardNotify(*_aboutToForwardValue);
+            
+            // release the object for being no useful anymore
+            delete _aboutToForwardValue;
 
-          // release the object for being no useful anymore
-          delete prevValue;
+            _aboutToForwardValue = nullptr;
+          }
 
           break;
         }
