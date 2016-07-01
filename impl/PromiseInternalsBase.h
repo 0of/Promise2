@@ -11,13 +11,6 @@
 namespace Promise2 {
   namespace Details {
     //
-    template<typename FulfillArgType, typename IsTask>
-    class Fulfill;
-      
-    template<typename FulfillArgType>
-    using SharedNonTaskFulfill = std::shared_ptr<Fulfill<FulfillArgType, std::false_type>>;
-
-    //
     //  @alias
     //
     template<typename T> using SharedPromiseValue = std::shared_ptr<

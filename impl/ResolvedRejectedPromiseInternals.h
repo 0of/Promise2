@@ -36,7 +36,6 @@ namespace Promise2 {
       }
 
     public:
-      void run() {}
       void runWith(const SharedPromiseValue<Void>&) {}
 
       void start() {}
