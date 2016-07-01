@@ -92,74 +92,6 @@ namespace Promise2 {
     };
 
     //
-    // fulfill traits
-    //
-    template<typename FulfillArgType, typename IsTask>
-    class Fulfill {
-    private:
-      SharedPromiseValue<FulfillArgType> _previousPromise;
-      std::atomic_flag _attachGuard;
-
-    protected:
-      Fulfill()
-        : _previousPromise{}
-        , _attachGuard{ ATOMIC_FLAG_INIT }
-      {}
-
-    public:
-      virtual ~Fulfill() = default;
-
-    public:
-      // 
-      // `attach` & `guard` will never be called in concurrency
-      // `attach` may be falsely invoked multi-times in mutli-thread environment
-      //
-      void attach(const SharedPromiseValue<FulfillArgType>& previousPromise) {
-        if (_attachGuard.test_and_set()) {
-          // already attached or is attaching
-          throw std::logic_error("promise duplicated attachments");
-        }
-
-        _previousPromise = previousPromise;
-      }
-
-      void guard() {
-        if (!_previousPromise) {
-          throw std::logic_error("null promise value");
-        }
-
-        _previousPromise->accessGuard();
-      }
-
-      template<typename T>
-      inline T get() {
-        return std::forward<T>(_previousPromise->template getValue<T>());
-      }
-    };
-
-    template<>
-    class Fulfill<Void, std::true_type> {
-    protected:
-      Fulfill()
-      {}
-        
-    public:
-      virtual ~Fulfill() = default;
-        
-    public:
-      void attach(const SharedPromiseValue<Void>& previousPromise) {
-          throw std::logic_error("task cannot be chained");
-      }
-      
-      void guard() {}
-
-      template<typename T>
-      inline T get() {
-        return Void{};
-      }
-    };
-
-    //
     // forward traits
     //
     template<typename ForwardType>
@@ -338,11 +270,7 @@ namespace Promise2 {
     };
 
     template<typename ReturnType, typename ArgType, typename IsTask>
-    class PromiseNodeInternalBase : public PromiseNode<ReturnType>
-                                  , public Fulfill<ArgType, IsTask> {
-    protected:
-      using PreviousRetrievable = Fulfill<ArgType, IsTask>;
-
+    class PromiseNodeInternalBase : public PromiseNode<ReturnType> {
     protected:
       DeferPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
@@ -356,7 +284,6 @@ namespace Promise2 {
       PromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
-        , PreviousRetrievable()
         , _forward{ std::make_unique<Forward<ReturnType>>() }
         , _context{ context }
         , _onReject{ std::move(onReject) }
@@ -381,19 +308,6 @@ namespace Promise2 {
       }
 
     public:
-      void run() {
-        std::call_once(_called, [this]() {
-          try {
-            this->guard();
-          } catch (...) {
-            this->runReject();
-            return;
-          }
-
-          this->onRun();
-        });
-      }
-
       void runWith(const SharedPromiseValue<ArgType>& value) {
         Fulfillment<ArgType, IsTask> fulfillment { value };
         try {
@@ -413,7 +327,6 @@ namespace Promise2 {
       }
 
     protected:
-      virtual void onRun() noexcept {}
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
 
       // called when exception has been thrown
@@ -454,16 +367,6 @@ namespace Promise2 {
       {}
 
     protected:
-      virtual void onRun() noexcept override {
-        try {
-          Base::_forward->fulfill(
-            _onFulfill(Base::template get<ConvertibleArgType>())
-          );
-        } catch (...) {
-          Base::_forward->reject(std::current_exception());
-        }
-      }
-
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
         try {
           Base::_forward->fulfill(
