@@ -11,13 +11,6 @@
 namespace Promise2 {
   namespace Details {
     //
-    template<typename FulfillArgType, typename IsTask>
-    class Fulfill;
-      
-    template<typename FulfillArgType>
-    using SharedNonTaskFulfill = std::shared_ptr<Fulfill<FulfillArgType, std::false_type>>;
-
-    //
     //  @alias
     //
     template<typename T> using SharedPromiseValue = std::shared_ptr<
@@ -37,8 +30,6 @@ namespace Promise2 {
       virtual ~PromiseNode() = default;
 
     public:
-      virtual void chainNext(const SharedNonTaskFulfill<T>&, std::function<void()>&& notify) = 0;
-      
       virtual void chainNext(std::function<void(const SharedPromiseValue<T>&)>&& notify) = 0;
       // proxy fowarding
       virtual void chainNext(const DeferPromiseCore<T>&) = 0;
@@ -93,72 +84,15 @@ namespace Promise2 {
       }
     };
 
-    //
-    // fulfill traits
-    //
-    template<typename FulfillArgType, typename IsTask>
-    class Fulfill {
-    private:
-      SharedPromiseValue<FulfillArgType> _previousPromise;
-      std::atomic_flag _attachGuard;
-
-    protected:
-      Fulfill()
-        : _previousPromise{}
-        , _attachGuard{ ATOMIC_FLAG_INIT }
-      {}
-
-    public:
-      virtual ~Fulfill() = default;
-
-    public:
-      // 
-      // `attach` & `guard` will never be called in concurrency
-      // `attach` may be falsely invoked multi-times in mutli-thread environment
-      //
-      void attach(const SharedPromiseValue<FulfillArgType>& previousPromise) {
-        if (_attachGuard.test_and_set()) {
-          // already attached or is attaching
-          throw std::logic_error("promise duplicated attachments");
-        }
-
-        _previousPromise = previousPromise;
-      }
-
-      void guard() {
-        if (!_previousPromise) {
-          throw std::logic_error("null promise value");
-        }
-
-        _previousPromise->accessGuard();
-      }
-
-      template<typename T>
-      inline T get() {
-        return std::forward<T>(_previousPromise->template getValue<T>());
-      }
+    enum class Status : std::uint8_t {
+      Running = 0,
+      Fulfilled = 1,
+      Rejected = 2
     };
 
-    template<>
-    class Fulfill<Void, std::true_type> {
-    protected:
-      Fulfill()
-      {}
-        
-    public:
-      virtual ~Fulfill() = default;
-        
-    public:
-      void attach(const SharedPromiseValue<Void>& previousPromise) {
-          throw std::logic_error("task cannot be chained");
-      }
-      
-      void guard() {}
-
-      template<typename T>
-      inline T get() {
-        return Void{};
-      }
+    enum class ChainedFlag : std::uint8_t {
+      No = 0,
+      Yes = 1
     };
 
     //
@@ -167,66 +101,36 @@ namespace Promise2 {
     template<typename ForwardType>
     class Forward {
     private:
-      SharedPromiseValue<ForwardType> _promise;
-
-      std::function<void()> _notify;
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
 #ifdef DEBUG
       std::atomic_flag _chainingGuard;
 #endif // DEBUG
 
-      std::atomic_bool _hasChained;
+      std::atomic<ChainedFlag> _chainedFlag;
+      SharedPromiseValue<ForwardType> *_aboutToForwardValue;
 
-      std::atomic<SharedPromiseValue<ForwardType> *> _aboutToForwardValue;
+      Status _status;
 
     public:
       Forward()
-        : _promise{ std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>() }
+        : _forwardNotify{}
 #ifdef DEBUG
         , _chainingGuard{ ATOMIC_FLAG_INIT }
 #endif // DEBUG
-        , _hasChained{ false }
-        , _forwardNotify{}
-        , _aboutToForwardValue{ new SharedPromiseValue<ForwardType>{ std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>() } }
+        , _chainedFlag{ ChainedFlag::No }
+        , _aboutToForwardValue{ nullptr }
+        , _status { Status::Running }
       {}
       ~Forward() {
-        auto value = _aboutToForwardValue.exchange(nullptr);
-        if (value) {
-          delete value;
+        if (_chainedFlag.load() == ChainedFlag::No) {
+          if (_aboutToForwardValue) {
+            delete _aboutToForwardValue;
+          }
         }
       }
 
     public:
-      void doChaining(const SharedNonTaskFulfill<ForwardType>& fulfill, std::function<void()>&& notify) {
-#ifdef DEBUG
-        if (_chainingGuard.test_and_set()) {
-          // already chained or is chaining
-          throw std::logic_error("promise duplicated chainings");
-        }
-#endif // DEBUG
-
-        try {
-
-          fulfill->attach(_promise);
-
-          // update notifier
-          _notify = std::move(notify);
-
-        } catch (const std::exception& e) {
-          // something goes wrong
-          // clean the guard flag
-          throw e;
-        }
-        
-        _hasChained = true;
-
-        // if already finished notify the next node now
-        if (_promise->hasAssigned()) {
-          _notify();
-        }
-      }
-
       void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
 #ifdef DEBUG
         if (_chainingGuard.test_and_set()) {
@@ -267,83 +171,102 @@ namespace Promise2 {
 
       template<typename T>
       void fulfill(T&& value) {
-        // acquire
-        auto prevValue = _aboutToForwardValue.exchange(nullptr);
+        // acquire ownership
+        auto preFlag = _chainedFlag.exchange(ChainedFlag::Yes);
 
-        // previous value has been assigned as null, which means already chained
-        if (!prevValue) {
+        // already chained
+        if (ChainedFlag::Yes == preFlag) {
           // just fire the notification with forward notifier
           auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
           sharedValue->setValue(std::forward<T>(value));
 
+          _status = Status::Fulfilled;
+
+          std::atomic_thread_fence(std::memory_order_acquire);
+
           _forwardNotify(sharedValue);
 
         } else {
           // epoch before chained
           // store the value for future notification
-          (*prevValue)->setValue(std::forward<T>(value));
+          auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+          sharedValue->setValue(std::forward<T>(value));
 
-          // exchange back to prevous value cuz `doChaining` may be waiting for the condition desperately
-          _aboutToForwardValue.exchange(prevValue);
+          _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+
+          // exchange back to prevous flag cuz `doChaining` may be waiting for the condition desperately
+          _chainedFlag.store(ChainedFlag::No);
+
+          _status = Status::Fulfilled;
         }
       }
         
       void reject(std::exception_ptr exception) {
+        // acquire ownership
+        auto preFlag = _chainedFlag.exchange(ChainedFlag::Yes);
 
-         // acquire
-        auto prevValue = _aboutToForwardValue.exchange(nullptr);
-
-        // previous value has been assigned as null, which means already chained
-        if (!prevValue) {
+        // already chained
+        if (ChainedFlag::Yes == preFlag) {
           // just fire the notification with forward notifier
           auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
           sharedValue->setException(exception);
+
+          _status = Status::Rejected;
+
+          std::atomic_thread_fence(std::memory_order_acquire);
 
           _forwardNotify(sharedValue);
 
         } else {
           // epoch before chained
           // store the value for future notification
-          (*prevValue)->setException(exception);
+          auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+          sharedValue->setException(exception);
 
-          // exchange back to prevous value cuz `doChaining` may be waiting for the condition desperately
-          _aboutToForwardValue.exchange(prevValue);
+          _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+
+          // exchange back to prevous flag cuz `doChaining` may be waiting for the condition desperately
+          _chainedFlag.store(ChainedFlag::No);
+
+          _status = Status::Rejected;
         }
       }
 
       bool hasChained() const {
-        return _hasChained;
+        return _chainedFlag.load();
       }
 
       bool isFulfilled() const {
-        return _promise->hasAssigned() && !_promise->isExceptionCase();
+        return _status == Status::Fulfilled;
       }
 
       bool isRejected() const {
-        return _promise->hasAssigned() && _promise->isExceptionCase();
+        return _status == Status::Rejected;
       }
 
     private:
       // thread safe chaining
       void chaining() {
         while (true) {
-          // acquire only if not null
-          auto prevValue = _aboutToForwardValue.exchange(nullptr);
+          // acquire only if is `no` flag
+          auto preFlag = _chainedFlag.exchange(ChainedFlag::Yes);
 
           // means `fulfill/reject` has acquired ownership
-          if (!prevValue) {
+          if (ChainedFlag::Yes == preFlag) {
             std::this_thread::yield();
             continue;
           }
 
           // ownership acquired 
           // notify with previously stored value
-          if ((*prevValue)->hasAssigned()) {
-            _forwardNotify(*prevValue);
-          }
+          if (_aboutToForwardValue) {
+            _forwardNotify(*_aboutToForwardValue);
+            
+            // release the object for being no useful anymore
+            delete _aboutToForwardValue;
 
-          // release the object for being no useful anymore
-          delete prevValue;
+            _aboutToForwardValue = nullptr;
+          }
 
           break;
         }
@@ -351,11 +274,7 @@ namespace Promise2 {
     };
 
     template<typename ReturnType, typename ArgType, typename IsTask>
-    class PromiseNodeInternalBase : public PromiseNode<ReturnType>
-                                  , public Fulfill<ArgType, IsTask> {
-    protected:
-      using PreviousRetrievable = Fulfill<ArgType, IsTask>;
-
+    class PromiseNodeInternalBase : public PromiseNode<ReturnType> {
     protected:
       DeferPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
@@ -369,17 +288,12 @@ namespace Promise2 {
       PromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
-        , PreviousRetrievable()
         , _forward{ std::make_unique<Forward<ReturnType>>() }
         , _context{ context }
         , _onReject{ std::move(onReject) }
       {}
 
     public:
-      virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
-        _forward->doChaining(fulfill, std::move(notify));
-      }
-
       virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
         _forward->doChaining(nextForward);
       }
@@ -398,19 +312,6 @@ namespace Promise2 {
       }
 
     public:
-      void run() {
-        std::call_once(_called, [this]() {
-          try {
-            this->guard();
-          } catch (...) {
-            this->runReject();
-            return;
-          }
-
-          this->onRun();
-        });
-      }
-
       void runWith(const SharedPromiseValue<ArgType>& value) {
         Fulfillment<ArgType, IsTask> fulfillment { value };
         try {
@@ -430,7 +331,6 @@ namespace Promise2 {
       }
 
     protected:
-      virtual void onRun() noexcept {}
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
 
       // called when exception has been thrown
@@ -471,16 +371,6 @@ namespace Promise2 {
       {}
 
     protected:
-      virtual void onRun() noexcept override {
-        try {
-          Base::_forward->fulfill(
-            _onFulfill(Base::template get<ConvertibleArgType>())
-          );
-        } catch (...) {
-          Base::_forward->reject(std::current_exception());
-        }
-      }
-
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
         try {
           Base::_forward->fulfill(

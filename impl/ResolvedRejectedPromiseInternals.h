@@ -36,17 +36,9 @@ namespace Promise2 {
       }
 
     public:
-      void run() {}
       void runWith(const SharedPromiseValue<Void>&) {}
 
       void start() {}
-
-      virtual void chainNext(const SharedNonTaskFulfill<ReturnType>& fulfill, std::function<void()>&& notify) override {
-        fulfill->attach(_promiseValue);
-
-        // promise value has been fulfilled or rejected
-        notify();
-      }
 
       virtual void chainNext(const DeferPromiseCore<ReturnType>& nextForward) override {
         if (_promiseValue->isExceptionCase()) {

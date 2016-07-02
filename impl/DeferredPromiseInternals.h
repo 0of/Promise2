@@ -63,16 +63,6 @@ namespace Promise2 {
       {}
 
     protected:
-      virtual void onRun() noexcept override {
-        try {
-           Defer deferred{ Base::_forward };
-          // no exception allowed
-          _onFulfill(std::move(deferred), Base::template get<ConvertibleArgType>());
-        } catch (...) {
-          Base::_forward->reject(std::current_exception());
-        }
-      }
-
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
         try {
           Defer deferred{ Base::_forward };

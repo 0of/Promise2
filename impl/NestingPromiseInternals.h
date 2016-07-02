@@ -31,15 +31,6 @@ namespace Promise2 {
       {}
 
     protected:
-      virtual void onRun() noexcept override {
-        try {
-          auto wrapped = std::move(_onFulfill(Base::template get<ConvertibleArgType>()));
-          wrapped.internal()->chainNext(Base::_forward);
-        } catch (...) {
-          Base::_forward->reject(std::current_exception());
-        }
-      }
-
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept override {
         try {
           auto wrapped = std::move(_onFulfill(fulfillment.template get<ConvertibleArgType>()));
