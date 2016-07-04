@@ -10,6 +10,25 @@
 
 namespace Promise2 {
   namespace Details {
+
+    //
+    //  @enums
+    //
+    enum class PormiseMode {
+      SingleValue
+    };
+
+    enum class Status : std::uint8_t {
+      Running = 0,
+      Fulfilled = 1,
+      Rejected = 2
+    };
+
+    enum class ChainedFlag : std::uint8_t {
+      No = 0,
+      Yes = 1
+    };
+
     //
     //  @alias
     //
@@ -84,15 +103,49 @@ namespace Promise2 {
       }
     };
 
-    enum class Status : std::uint8_t {
-      Running = 0,
-      Fulfilled = 1,
-      Rejected = 2
-    };
+    template<typename ForwardType>
+    class SingleValueForwardTrait {
+    private:
+      SharedPromiseValue<ForwardType> *_aboutToForwardValue;
 
-    enum class ChainedFlag : std::uint8_t {
-      No = 0,
-      Yes = 1
+    public:
+      SingleValueForwardTrait()
+        : _aboutToForwardValue{ nullptr }
+      {}
+
+    public:
+      void onDestructing() {
+        if (_aboutToForwardValue) {
+          delete _aboutToForwardValue;
+          _aboutToForwardValue = nullptr;
+        }
+      }
+
+      template<typename T>
+      void onFulfillBeforeChain(T&& v) {
+        auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+        sharedValue->setValue(std::forward<T>(v));
+
+        _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+      }
+
+      void onExceptionBeforeChain(std::exception_ptr e) {
+        auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+        sharedValue->setException(e);
+
+        _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+      }
+
+      void onChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>& notify) {
+        if (_aboutToForwardValue) {
+          notify(*_aboutToForwardValue);
+            
+          // release the object for being no useful anymore
+          delete _aboutToForwardValue;
+
+          _aboutToForwardValue = nullptr;
+        }
+      }
     };
 
     //
@@ -103,11 +156,9 @@ namespace Promise2 {
     private:
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
-#ifdef DEBUG
-      std::atomic_flag _chainingGuard;
-#endif // DEBUG
-
       std::atomic<ChainedFlag> _chainedFlag;
+      SingleValueForwardTrait<ForwardType> _forwardTrait;
+
       SharedPromiseValue<ForwardType> *_aboutToForwardValue;
 
       Status _status;
@@ -115,30 +166,17 @@ namespace Promise2 {
     public:
       Forward()
         : _forwardNotify{}
-#ifdef DEBUG
-        , _chainingGuard{ ATOMIC_FLAG_INIT }
-#endif // DEBUG
         , _chainedFlag{ ChainedFlag::No }
-        , _aboutToForwardValue{ nullptr }
         , _status { Status::Running }
       {}
       ~Forward() {
         if (_chainedFlag.load() == ChainedFlag::No) {
-          if (_aboutToForwardValue) {
-            delete _aboutToForwardValue;
-          }
+          _forwardTrait.onDestructing();
         }
       }
 
     public:
       void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
-#ifdef DEBUG
-        if (_chainingGuard.test_and_set()) {
-          // already chained or is chaining
-          throw std::logic_error("promise duplicated chainings");
-        }
-#endif // DEBUG
-
         // move the notify before enter the critical section
         _forwardNotify = [=](const SharedPromiseValue<ForwardType>& valuePromise){
           if (!valuePromise->hasAssigned())
@@ -156,13 +194,6 @@ namespace Promise2 {
 
 
       void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
-#ifdef DEBUG
-        if (_chainingGuard.test_and_set()) {
-          // already chained or is chaining
-          throw std::logic_error("promise duplicated chainings");
-        }
-#endif // DEBUG
-
         // move the notify before enter the critical section
         _forwardNotify = std::move(notify);
 
@@ -189,10 +220,7 @@ namespace Promise2 {
         } else {
           // epoch before chained
           // store the value for future notification
-          auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
-          sharedValue->setValue(std::forward<T>(value));
-
-          _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+          _forwardTrait.onFulfillBeforeChain(std::forward<T>(value));
 
           // exchange back to prevous flag cuz `doChaining` may be waiting for the condition desperately
           _chainedFlag.store(ChainedFlag::No);
@@ -220,10 +248,7 @@ namespace Promise2 {
         } else {
           // epoch before chained
           // store the value for future notification
-          auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
-          sharedValue->setException(exception);
-
-          _aboutToForwardValue = new SharedPromiseValue<ForwardType>{ sharedValue };
+          _forwardTrait.onExceptionBeforeChain(exception);
 
           // exchange back to prevous flag cuz `doChaining` may be waiting for the condition desperately
           _chainedFlag.store(ChainedFlag::No);
@@ -259,14 +284,7 @@ namespace Promise2 {
 
           // ownership acquired 
           // notify with previously stored value
-          if (_aboutToForwardValue) {
-            _forwardNotify(*_aboutToForwardValue);
-            
-            // release the object for being no useful anymore
-            delete _aboutToForwardValue;
-
-            _aboutToForwardValue = nullptr;
-          }
+          _forwardTrait.onChaining(_forwardNotify);
 
           break;
         }
