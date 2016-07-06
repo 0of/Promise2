@@ -3,8 +3,9 @@
 
 #include <thread>
 #include <memory>
-#include <future>
 #include <type_traits>
+#include <future>
+#include <vector>
 
 #include "value/GeneralPromiseValue.h"
 
@@ -144,6 +145,63 @@ namespace Promise2 {
           delete _aboutToForwardValue;
 
           _aboutToForwardValue = nullptr;
+        }
+      }
+    };
+
+    template<typename ForwardType>
+    class MultiValueForwardTrait {
+    private:
+      // notify order relaxed
+      std::vector<SharedPromiseValue<ForwardType>> *_aboutToForwardValueSet;
+
+    public:
+      MultiValueForwardTrait()
+        : _aboutToForwardValueSet{ nullptr }
+      {}
+
+    public:
+      void onDestructing() {
+        if (_aboutToForwardValueSet) {
+          delete _aboutToForwardValueSet;
+          _aboutToForwardValueSet = nullptr;
+        }
+      }
+
+      template<typename T>
+      void onFulfillBeforeChain(T&& v) {
+        auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+        sharedValue->setValue(std::forward<T>(v));
+
+        if (!_aboutToForwardValueSet) {
+          _aboutToForwardValueSet = new std::vector<SharedPromiseValue<ForwardType>>{ sharedValue };
+        } else {
+          _aboutToForwardValueSet->push_back(sharedValue);
+        }
+      }
+
+      void onExceptionBeforeChain(std::exception_ptr e) {
+        auto sharedValue = std::make_shared<typename SharedPromiseValue<ForwardType>::element_type>();
+        sharedValue->setException(e);
+
+        if (!_aboutToForwardValueSet) {
+          _aboutToForwardValueSet = new std::vector<SharedPromiseValue<ForwardType>>{ sharedValue };
+        } else {
+          _aboutToForwardValueSet->push_back(sharedValue);
+        }
+      }
+
+      void onChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>& notify) {
+        if (_aboutToForwardValueSet) {
+
+          for (auto& eachValue :  *_aboutToForwardValueSet) {
+            notify(eachValue);
+          }
+          
+          // release the object for being no useful anymore
+          delete _aboutToForwardValueSet;
+
+          _aboutToForwardValueSet = nullptr;
         }
       }
     };
