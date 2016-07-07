@@ -59,6 +59,19 @@ namespace Promise2 {
       virtual bool isRejected() const = 0;
     };
 
+    // 
+    // each `RecursionPromise` will hold one shared `RecursionPromiseNode`
+    //
+    template<typename T>
+    class RecursionPromiseNode : public PromiseNode<T> {
+    public:
+      virtual ~RecursionPromiseNode() = default;
+
+    public:
+      virtual void chainNext(std::function<void(const SharedPromiseValue<T>&)>&& notify, 
+                             std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) = 0;
+    };
+
     //
     // fulfillment
     //  SharedPromiseValue wrapper
