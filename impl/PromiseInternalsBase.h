@@ -30,6 +30,12 @@ namespace Promise2 {
       Yes = 1
     };
 
+    enum class RecursionStatus : std::uint32_t {
+      Loopping = 0,
+      Finished = 1,
+      Fired = 2
+    };
+
     //
     //  @alias
     //
@@ -439,6 +445,26 @@ namespace Promise2 {
     private:
       PromiseNodeInternalBase(PromiseNodeInternalBase&& node) = delete;
       PromiseNodeInternalBase(const PromiseNodeInternalBase&) = delete;
+    };
+
+    //
+    // RecursionPromiseNodeInternalBase
+    //
+    template<typename ReturnType, typename ArgType, typename IsTask>
+    class RecursionPromiseNodeInternalBase : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+    private:
+      std::atomic_ulong _semaphore;
+      RecursionStatus _status;
+
+    protected:
+      DeferPromiseCore<ReturnType> *_finishForward;
+
+    public:
+      void finish() {
+        // acquire 
+        // update status
+        // fire event
+      }
     };
 
     //
