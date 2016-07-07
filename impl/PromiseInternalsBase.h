@@ -375,10 +375,7 @@ namespace Promise2 {
       std::shared_ptr<ThreadContext> _context;
 
       OnRejectFunction<ReturnType> _onReject;
-
-    private:
-      std::once_flag _called;
-
+      
     public:
       PromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
