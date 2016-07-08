@@ -40,6 +40,7 @@ namespace Promise2 {
     template<typename T> class PromiseNode;
     template<typename T> class Forward;
     template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<BoxVoid<T>>>;
+    template<typename T> using DeferRecursionPromiseCore = std::shared_ptr<Forward<BoxVoid<T>>>;
   } // Details
     
   // !
@@ -49,6 +50,9 @@ namespace Promise2 {
   // !
 
   template<typename First, typename... Rest> using first_of = First;
+  template<typename T, typename RecursionMode> using DeferCoreType = std::conditional_t<std::is_same<RecursionMode, std::true_type>::value, 
+                                                                                            Details::DeferPromiseCore<T>,
+                                                                                            Details::DeferPromiseCore<T>>;
 
   //
   // @class ThreadContext
@@ -62,18 +66,19 @@ namespace Promise2 {
   };
 
   //
-  // @class PromiseDefer
+  // @class PromiseDeferBase
+  //  expose public APIs
   //
-  template<typename T>
-  class PromiseDefer {
+  template<typename T, typename RecursionMode>
+  class PromiseDeferBase {
   private:
-    Details::DeferPromiseCore<T> _core;
+    DeferCoreType<T, RecursionMode> _core;
 
   public:
-    PromiseDefer(Details::DeferPromiseCore<T>& core);
+    PromiseDeferBase(DeferCoreType<T, RecursionMode>& core);
 
-    PromiseDefer(PromiseDefer<T>&&) = default;
-    ~PromiseDefer() = default;
+    PromiseDeferBase(PromiseDeferBase<T, RecursionMode>&&) = default;
+    ~PromiseDeferBase() = default;
 
   public:
     template<typename X> void setResult(X&& r);
@@ -81,20 +86,20 @@ namespace Promise2 {
     void setException(std::exception_ptr e);
 
   private:
-    PromiseDefer(const PromiseDefer<T>&) = delete;
-    PromiseDefer& operator = (const PromiseDefer<T>&) = delete;
+    PromiseDeferBase(const PromiseDeferBase<T, RecursionMode>&) = delete;
+    PromiseDeferBase<T, RecursionMode>& operator = (const PromiseDeferBase<T, RecursionMode>&) = delete;
   };
 
-  template<>
-  class PromiseDefer<void> {
+  template<typename RecursionMode>
+  class PromiseDeferBase<void, RecursionMode> {
   private:
-    Details::DeferPromiseCore<Void> _core;
+    DeferCoreType<void, RecursionMode> _core;
 
   public:
-    PromiseDefer(Details::DeferPromiseCore<Void>& core);
+    PromiseDeferBase(DeferCoreType<void, RecursionMode>& core);
 
-    PromiseDefer(PromiseDefer<void>&&) = default;
-    ~PromiseDefer() = default;
+    PromiseDeferBase(PromiseDeferBase<void, RecursionMode>&&) = default;
+    ~PromiseDeferBase() = default;
 
   public:
     void setResult();
@@ -102,9 +107,14 @@ namespace Promise2 {
     void setException(std::exception_ptr e);
 
   private:
-    PromiseDefer(const PromiseDefer<void>&) = delete;
-    PromiseDefer<void>& operator = (const PromiseDefer<void>&) = delete;
+    PromiseDeferBase(const PromiseDeferBase<void, RecursionMode>&) = delete;
+    PromiseDeferBase<void, RecursionMode>& operator = (const PromiseDeferBase<void, RecursionMode>&) = delete;
   };
+
+  //
+  // @using PromiseDefer
+  //
+  template<typename T> using PromiseDefer = PromiseDeferBase<T, std::false_type>;
 
   template<typename T>
   class PromiseSpawner {
