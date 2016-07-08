@@ -30,6 +30,12 @@ namespace Promise2 {
       Yes = 1
     };
 
+    enum class RecursionStatus : std::uint32_t {
+      Loopping = 0,
+      Finished = 1,
+      Fired = 2
+    };
+
     //
     //  @alias
     //
@@ -57,6 +63,19 @@ namespace Promise2 {
     public:
       virtual bool isFulfilled() const = 0;
       virtual bool isRejected() const = 0;
+    };
+
+    // 
+    // each `RecursionPromise` will hold one shared `RecursionPromiseNode`
+    //
+    template<typename T>
+    class RecursionPromiseNode : public PromiseNode<T> {
+    public:
+      virtual ~RecursionPromiseNode() = default;
+
+    public:
+      virtual void chainNext(std::function<void(const SharedPromiseValue<T>&)>&& notify, 
+                             std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) = 0;
     };
 
     //
@@ -356,10 +375,7 @@ namespace Promise2 {
       std::shared_ptr<ThreadContext> _context;
 
       OnRejectFunction<ReturnType> _onReject;
-
-    private:
-      std::once_flag _called;
-
+      
     public:
       PromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
@@ -426,6 +442,26 @@ namespace Promise2 {
     private:
       PromiseNodeInternalBase(PromiseNodeInternalBase&& node) = delete;
       PromiseNodeInternalBase(const PromiseNodeInternalBase&) = delete;
+    };
+
+    //
+    // RecursionPromiseNodeInternalBase
+    //
+    template<typename ReturnType, typename ArgType, typename IsTask>
+    class RecursionPromiseNodeInternalBase : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+    private:
+      std::atomic_ulong _semaphore;
+      RecursionStatus _status;
+
+    protected:
+      DeferPromiseCore<ReturnType> *_finishForward;
+
+    public:
+      void finish() {
+        // acquire 
+        // update status
+        // fire event
+      }
     };
 
     //
