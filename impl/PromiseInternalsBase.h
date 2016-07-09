@@ -69,13 +69,22 @@ namespace Promise2 {
     // each `RecursionPromise` will hold one shared `RecursionPromiseNode`
     //
     template<typename T>
-    class RecursionPromiseNode : public PromiseNode<T> {
+    class RecursionPromiseNode {
     public:
       virtual ~RecursionPromiseNode() = default;
 
     public:
-      virtual void chainNext(std::function<void(const SharedPromiseValue<T>&)>&& notify, 
+      virtual void chainRecursionNext(std::function<void(const SharedPromiseValue<T>&)>&& notify, 
                              std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) = 0;
+
+      virtual void chainRecursionNext(const DeferRecursionPromiseCore<T>&) = 0;
+
+    public:
+      virtual void chainNext(std::function<void(const SharedPromiseValue<Void>&)>&& notify) = 0;
+
+    public:
+      virtual bool isFulfilled() const = 0;
+      virtual bool isRejected() const = 0;
     };
 
     //
@@ -228,13 +237,13 @@ namespace Promise2 {
     //
     // forward traits
     //
-    template<typename ForwardType>
+    template<typename ForwardType, template<typename T> class ForwardTrait>
     class Forward {
     private:
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
       std::atomic<ChainedFlag> _chainedFlag;
-      SingleValueForwardTrait<ForwardType> _forwardTrait;
+      ForwardTrait<ForwardType> _forwardTrait;
 
       SharedPromiseValue<ForwardType> *_aboutToForwardValue;
 
@@ -380,7 +389,7 @@ namespace Promise2 {
       PromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
                   const std::shared_ptr<ThreadContext>& context)
         : PromiseNode<ReturnType>()
-        , _forward{ std::make_unique<Forward<ReturnType>>() }
+        , _forward{ std::make_unique<Forward<ReturnType, SingleValueForwardTrait>>() }
         , _context{ context }
         , _onReject{ std::move(onReject) }
       {}
@@ -448,20 +457,66 @@ namespace Promise2 {
     // RecursionPromiseNodeInternalBase
     //
     template<typename ReturnType, typename ArgType, typename IsTask>
-    class RecursionPromiseNodeInternalBase : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+    class RecursionPromiseNodeInternalBase : public RecursionPromiseNode<ReturnType> {
+    protected:
+      DeferRecursionPromiseCore<ReturnType> _forward;
+      std::shared_ptr<ThreadContext> _context;
+
+      std::function<void(const SharedPromiseValue<Void>&)> _finishNotify;
+
     private:
       std::atomic_ulong _semaphore;
       RecursionStatus _status;
 
     protected:
-      DeferPromiseCore<ReturnType> *_finishForward;
+      RecursionPromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
+                  const std::shared_ptr<ThreadContext>& context)
+        : RecursionPromiseNode<ReturnType>()
+        , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
+        , _context{ context }
+      {}
 
     public:
+      virtual void chainRecursionNext(std::function<void(const SharedPromiseValue<ReturnType>&)>&& notify,
+                                      std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) override {
+
+      }
+
+      virtual void chainRecursionNext(const DeferRecursionPromiseCore<ReturnType>&) override {
+
+      }
+
+    public:
+      virtual void chainNext(std::function<void(const SharedPromiseValue<Void>&)>&& notify) override {
+
+      }
+
+    public:
+      virtual bool isFulfilled() const override {
+        return false;
+      }
+
+      virtual bool isRejected() const override {
+        return false;
+      }
+
+    public:
+      void runWith(const SharedPromiseValue<ArgType>& value) {
+        // run each 
+      }
+
+      void start() {
+        throw 0;
+      }
+
       void finish() {
         // acquire 
         // update status
         // fire event
       }
+
+    protected:
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
     };
 
     //

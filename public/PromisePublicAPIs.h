@@ -38,9 +38,11 @@ namespace Promise2 {
   // declarations
   namespace Details {
     template<typename T> class PromiseNode;
-    template<typename T> class Forward;
-    template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<BoxVoid<T>>>;
-    template<typename T> using DeferRecursionPromiseCore = std::shared_ptr<Forward<BoxVoid<T>>>;
+    template<typename T, template<typename K> class ForwardTrait> class Forward;
+    template<typename ForwardType> class SingleValueForwardTrait;
+    template<typename ForwardType> class MultiValueForwardTrait;
+    template<typename T> using DeferPromiseCore = std::shared_ptr<Forward<BoxVoid<T>, SingleValueForwardTrait>>;
+    template<typename T> using DeferRecursionPromiseCore = std::shared_ptr<Forward<BoxVoid<T>, MultiValueForwardTrait>>;
   } // Details
     
   // !
