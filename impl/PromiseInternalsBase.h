@@ -496,11 +496,11 @@ namespace Promise2 {
 
     public:
       virtual bool isFulfilled() const override {
-        return _status == Finished;
+        return _status == RecursionStatus::Finished;
       }
 
       virtual bool isRejected() const override {
-        return _status == ExceptionOccurred;
+        return _status == RecursionStatus::ExceptionOccurred;
       }
 
     public:
