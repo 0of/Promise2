@@ -299,6 +299,15 @@ namespace Promise2 {
   public:
     inline SharedPromiseNode<T> internal() const { return _node; }
   };
+
+  //
+  // @class RecursionPromise
+  //
+  class RecursionPromise {
+  public:
+    void eachThen();
+    void finishedThen();
+  };
 }
  
 #endif // PROMISE_PUBLIC_APIS_H
