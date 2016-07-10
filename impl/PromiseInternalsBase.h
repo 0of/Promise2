@@ -19,21 +19,22 @@ namespace Promise2 {
       SingleValue
     };
 
-    enum class Status : std::uint8_t {
+    enum class Status : std::uint16_t {
       Running = 0,
       Fulfilled = 1,
       Rejected = 2
     };
 
-    enum class ChainedFlag : std::uint8_t {
+    enum class ChainedFlag : std::uint16_t {
       No = 0,
       Yes = 1
     };
 
-    enum class RecursionStatus : std::uint32_t {
+    enum class RecursionStatus : std::uint16_t {
       Loopping = 0,
       Finished = 1,
-      Fired = 2
+      ExceptionOccurred = 2,
+      Fired = 3
     };
 
     //
@@ -240,14 +241,13 @@ namespace Promise2 {
     template<typename ForwardType, template<typename T> class ForwardTrait>
     class Forward {
     private:
+      std::atomic<ChainedFlag> _chainedFlag;
+      Status _status;
+
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
-      std::atomic<ChainedFlag> _chainedFlag;
       ForwardTrait<ForwardType> _forwardTrait;
-
       SharedPromiseValue<ForwardType> *_aboutToForwardValue;
-
-      Status _status;
 
     public:
       Forward()
@@ -458,22 +458,25 @@ namespace Promise2 {
     //
     template<typename ReturnType, typename ArgType, typename IsTask>
     class RecursionPromiseNodeInternalBase : public RecursionPromiseNode<ReturnType> {
+    private:
+      RecursionStatus _status;
+      std::uint16_t _chainingCount;
+
+      std::atomic<ChainedFlag> _chainedFlag;
+
     protected:
       DeferRecursionPromiseCore<ReturnType> _forward;
       std::shared_ptr<ThreadContext> _context;
 
       std::function<void(const SharedPromiseValue<Void>&)> _finishNotify;
 
-    private:
-      std::atomic_ulong _semaphore;
-      RecursionStatus _status;
-
     protected:
-      RecursionPromiseNodeInternalBase(OnRejectFunction<ReturnType>&& onReject,
-                  const std::shared_ptr<ThreadContext>& context)
+      RecursionPromiseNodeInternalBase(const std::shared_ptr<ThreadContext>& context)
         : RecursionPromiseNode<ReturnType>()
         , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
         , _context{ context }
+        , _chainingCount{ 0 }
+        , _chainedFlag{ ChainedFlag::No }
       {}
 
     public:
@@ -488,16 +491,16 @@ namespace Promise2 {
 
     public:
       virtual void chainNext(std::function<void(const SharedPromiseValue<Void>&)>&& notify) override {
-
+        
       }
 
     public:
       virtual bool isFulfilled() const override {
-        return false;
+        return _status == Finished;
       }
 
       virtual bool isRejected() const override {
-        return false;
+        return _status == ExceptionOccurred;
       }
 
     public:
@@ -509,7 +512,7 @@ namespace Promise2 {
         throw 0;
       }
 
-      void finish() {
+      void finish(const SharedPromiseValue<Void>& value) {
         // acquire 
         // update status
         // fire event
