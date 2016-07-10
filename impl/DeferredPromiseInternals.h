@@ -12,33 +12,36 @@
 
 namespace Promise2 {
   //
-  // @class PromiseDefer
+  // @class PromiseDeferBase
   //
-  template<typename T>
-  PromiseDefer<T>::PromiseDefer(Details::DeferPromiseCore<T>& core)
+  template<typename T, typename RecursionMode>
+  PromiseDeferBase<T, RecursionMode>::PromiseDeferBase(DeferCoreType<T, RecursionMode>& core)
     : _core{ core }
   {}
 
-  template<typename T>
+  template<typename T, typename RecursionMode>
   template<typename X>
-  void PromiseDefer<T>::setResult(X&& r) {
+  void PromiseDeferBase<T, RecursionMode>::setResult(X&& r) {
     _core->fulfill(std::forward<X>(r));
   }
 
-  template<typename T>
-  void PromiseDefer<T>::setException(std::exception_ptr e) {
+  template<typename T, typename RecursionMode>
+  void PromiseDeferBase<T, RecursionMode>::setException(std::exception_ptr e) {
     _core->reject(e);
   }
 
-  PromiseDefer<void>::PromiseDefer(Details::DeferPromiseCore<void>& core)
+  template<typename RecursionMode>
+  PromiseDeferBase<void, RecursionMode>::PromiseDeferBase(DeferCoreType<void, RecursionMode>& core)
     : _core{ core }
   {}
 
-	void PromiseDefer<void>::setResult() {
+  template<typename RecursionMode>
+	void PromiseDeferBase<void, RecursionMode>::setResult() {
     _core->fulfill(Void{});
 	}
 
-  void PromiseDefer<void>::setException(std::exception_ptr e) {
+  template<typename RecursionMode>
+  void PromiseDeferBase<void, RecursionMode>::setException(std::exception_ptr e) {
   	_core->reject(e);
   }
 }
