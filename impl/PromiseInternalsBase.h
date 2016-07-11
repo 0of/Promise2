@@ -462,7 +462,9 @@ namespace Promise2 {
       RecursionStatus _status;
       std::uint16_t _chainingCount;
 
-      std::atomic<ChainedFlag> _chainedFlag;
+      // 0 ... |    0     |     0     |     0
+      //       | init bit | chain bit | finish bit
+      std::atomic_ulong _chainedFlag;
 
     protected:
       DeferRecursionPromiseCore<ReturnType> _forward;
@@ -476,22 +478,51 @@ namespace Promise2 {
         , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
         , _context{ context }
         , _chainingCount{ 0 }
-        , _chainedFlag{ ChainedFlag::No }
+        , _chainedFlag{ 0 }
       {}
 
     public:
       virtual void chainRecursionNext(std::function<void(const SharedPromiseValue<ReturnType>&)>&& notify,
                                       std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) override {
 
+        // inc chainning count before acquire lock
+        ++_chainingCount;
+
+        // enable init bit
+        auto preFlag = _chainedFlag |= 0x110;
+
+        if (preFlag & 0x001) {
+          // finish bit is on 
+          // wait till it's turning off
+          std::uint32_t expected = 0x110;
+
+          while (!std::atomic_compare_exchange_weak(&_chainedFlag, &expected, expected)) {
+            std::this_thread::yield();
+          }
+        }
+
+        _forward->chainNext(notify);
+
+        // notify if necessary
+
+        // dec chainning count
+        --_chainingCount;
+
+        std::atomic_thread_fence();
+
+        if (0 == _chainingCount) {
+          // turns off chain bit
+          _chainedFlag |= 0x100;
+        }
       }
 
       virtual void chainRecursionNext(const DeferRecursionPromiseCore<ReturnType>&) override {
-
+        ++_chainingCount;
       }
 
     public:
       virtual void chainNext(std::function<void(const SharedPromiseValue<Void>&)>&& notify) override {
-        
+        ++_chainingCount;
       }
 
     public:
