@@ -47,8 +47,10 @@ namespace Promise2 {
     
   // !
   template<typename T> class Promise;
+  template<typename T> class RecursionPromise;
   template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<BoxVoid<T>>>;
   template<typename T> using OnRejectFunction = std::function<Promise<UnboxVoid<T>>(std::exception_ptr)>;
+  template<typename T> using OnRecursionRejectFunction = std::function<RecursionPromise<UnboxVoid<T>>(std::exception_ptr)>;
   // !
 
   template<typename First, typename... Rest> using first_of = First;
@@ -303,6 +305,7 @@ namespace Promise2 {
   //
   // @class RecursionPromise
   //
+  template<typename T>
   class RecursionPromise {
   public:
     void eachThen();

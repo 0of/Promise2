@@ -247,13 +247,12 @@ namespace Promise2 {
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
       ForwardTrait<ForwardType> _forwardTrait;
-      SharedPromiseValue<ForwardType> *_aboutToForwardValue;
 
     public:
       Forward()
-        : _forwardNotify{}
-        , _chainedFlag{ ChainedFlag::No }
+        : _chainedFlag{ ChainedFlag::No }
         , _status { Status::Running }
+        , _forwardNotify{}
       {}
       ~Forward() {
         if (_chainedFlag.load() == ChainedFlag::No) {
@@ -459,98 +458,116 @@ namespace Promise2 {
     template<typename ReturnType, typename ArgType, typename IsTask>
     class RecursionPromiseNodeInternalBase : public RecursionPromiseNode<ReturnType> {
     private:
-      RecursionStatus _status;
-      std::uint16_t _chainingCount;
+      // implements BasicLockable
+      class SpinMutex {
+      private:
+        std::atomic_bool _flag;
 
-      // 0 ... |    0     |     0     |     0
-      //       | init bit | chain bit | finish bit
-      std::atomic_ulong _chainedFlag;
+      public:
+        SpinMutex() : _flag{ false }
+        {}
+
+      public:
+        void lock() {
+
+        }
+
+        void unlock() noexcept {
+
+        }
+      } _mutex;
 
     protected:
       DeferRecursionPromiseCore<ReturnType> _forward;
+      DeferPromiseCore<Void> _finishForward;
       std::shared_ptr<ThreadContext> _context;
 
-      std::function<void(const SharedPromiseValue<Void>&)> _finishNotify;
+      OnRecursionRejectFunction<ReturnType> _onReject;
 
     protected:
       RecursionPromiseNodeInternalBase(const std::shared_ptr<ThreadContext>& context)
         : RecursionPromiseNode<ReturnType>()
         , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
+        , _finishForward{ std::make_unique<Forward<Void, SingleValueForwardTrait>>() }
         , _context{ context }
-        , _chainingCount{ 0 }
-        , _chainedFlag{ 0 }
       {}
 
     public:
       virtual void chainRecursionNext(std::function<void(const SharedPromiseValue<ReturnType>&)>&& notify,
                                       std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) override {
 
-        // inc chainning count before acquire lock
-        ++_chainingCount;
+        _forward->doChaining(notify);
 
-        // enable init bit
-        auto preFlag = _chainedFlag |= 0x110;
-
-        if (preFlag & 0x001) {
-          // finish bit is on 
-          // wait till it's turning off
-          std::uint32_t expected = 0x110;
-
-          while (!std::atomic_compare_exchange_weak(&_chainedFlag, &expected, expected)) {
-            std::this_thread::yield();
-          }
-        }
-
-        _forward->chainNext(notify);
-
-        // notify if necessary
-
-        // dec chainning count
-        --_chainingCount;
-
-        std::atomic_thread_fence();
-
-        if (0 == _chainingCount) {
-          // turns off chain bit
-          _chainedFlag |= 0x100;
-        }
+        std::lock_guard<SpinMutex> _ (_mutex);
+        _finishForward->doChaining(std::move(notifyWhenFinished));
       }
 
-      virtual void chainRecursionNext(const DeferRecursionPromiseCore<ReturnType>&) override {
-        ++_chainingCount;
+      virtual void chainRecursionNext(const DeferRecursionPromiseCore<ReturnType>& defer) override {
+        throw 0;
       }
 
     public:
       virtual void chainNext(std::function<void(const SharedPromiseValue<Void>&)>&& notify) override {
-        ++_chainingCount;
+        std::lock_guard<SpinMutex> _ (_mutex);
+        _finishForward->doChaining(std::move(notify));
       }
 
     public:
       virtual bool isFulfilled() const override {
-        return _status == RecursionStatus::Finished;
+        return _finishForward->isFulfilled();
       }
 
       virtual bool isRejected() const override {
-        return _status == RecursionStatus::ExceptionOccurred;
+        return _finishForward->isRejected();
       }
 
     public:
       void runWith(const SharedPromiseValue<ArgType>& value) {
-        // run each 
+        Fulfillment<ArgType, IsTask> fulfillment { value };
+        try {
+          fulfillment.guard();
+        } catch (...) {
+          this->runReject();
+          return;
+        }
+
+        this->onRun(fulfillment);
       }
 
+      // start as task
+      //  if non task call this function, guard() will throw logic exception
       void start() {
-        throw 0;
-      }
-
-      void finish(const SharedPromiseValue<Void>& value) {
-        // acquire 
-        // update status
-        // fire event
+        this->runWith(nullptr);
       }
 
     protected:
       virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
+
+      // called when exception has been thrown
+      void runReject() noexcept {
+        if (_onReject) {
+          try {
+            // chain the returned promise
+            _onReject(std::current_exception()).internal()->chainNext(_forward);
+          } catch (...) {
+            _forward->reject(std::current_exception());
+          }
+        } else {
+          _forward->reject(std::current_exception());
+        }
+      }
+
+      void finish(const SharedPromiseValue<Void>& value) {
+        Fulfillment<Void, std::false_type> fulfillment { value };
+        try {
+          fulfillment.guard();
+        } catch (...) {
+          _finishForward->reject(std::current_exception());
+          return;
+        }
+
+        _finishForward->fulfill(Void{});
+      }
     };
 
     //
