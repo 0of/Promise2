@@ -254,14 +254,14 @@ namespace Promise2 {
         , _status { Status::Running }
         , _forwardNotify{}
       {}
-      ~Forward() {
+      virtual ~Forward() {
         if (_chainedFlag.load() == ChainedFlag::No) {
           _forwardTrait.onDestructing();
         }
       }
 
     public:
-      void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
+      virtual void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
         // move the notify before enter the critical section
         _forwardNotify = [=](const SharedPromiseValue<ForwardType>& valuePromise){
           if (!valuePromise->hasAssigned())
@@ -277,8 +277,7 @@ namespace Promise2 {
         chaining();
       }
 
-
-      void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
+      virtual void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
         // move the notify before enter the critical section
         _forwardNotify = std::move(notify);
 
@@ -298,9 +297,7 @@ namespace Promise2 {
 
           _status = Status::Fulfilled;
 
-          std::atomic_thread_fence(std::memory_order_acquire);
-
-          _forwardNotify(sharedValue);
+          this->notify(sharedValue);
 
         } else {
           // epoch before chained
@@ -326,9 +323,7 @@ namespace Promise2 {
 
           _status = Status::Rejected;
 
-          std::atomic_thread_fence(std::memory_order_acquire);
-
-          _forwardNotify(sharedValue);
+          this->notify(sharedValue);
 
         } else {
           // epoch before chained
@@ -352,6 +347,12 @@ namespace Promise2 {
 
       bool isRejected() const {
         return _status == Status::Rejected;
+      }
+
+    protected:
+      virtual void notify(const SharedPromiseValue<ForwardType>& value) {
+        std::atomic_thread_fence(std::memory_order_acquire);
+        _forwardNotify(value);
       }
 
     private:
@@ -457,26 +458,6 @@ namespace Promise2 {
     //
     template<typename ReturnType, typename ArgType, typename IsTask>
     class RecursionPromiseNodeInternalBase : public RecursionPromiseNode<ReturnType> {
-    private:
-      // implements BasicLockable
-      class SpinMutex {
-      private:
-        std::atomic_bool _flag;
-
-      public:
-        SpinMutex() : _flag{ false }
-        {}
-
-      public:
-        void lock() {
-
-        }
-
-        void unlock() noexcept {
-
-        }
-      } _mutex;
-
     protected:
       DeferRecursionPromiseCore<ReturnType> _forward;
       DeferPromiseCore<Void> _finishForward;
@@ -497,8 +478,6 @@ namespace Promise2 {
                                       std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) override {
 
         _forward->doChaining(notify);
-
-        std::lock_guard<SpinMutex> _ (_mutex);
         _finishForward->doChaining(std::move(notifyWhenFinished));
       }
 
@@ -508,7 +487,6 @@ namespace Promise2 {
 
     public:
       virtual void chainNext(std::function<void(const SharedPromiseValue<Void>&)>&& notify) override {
-        std::lock_guard<SpinMutex> _ (_mutex);
         _finishForward->doChaining(std::move(notify));
       }
 
