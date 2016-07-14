@@ -389,6 +389,7 @@ namespace Promise2 {
       class ChainingMutex {
       private:
         std::atomic<std::uint32_t> *_flags;
+
       public:
         // modified when lock
         bool alreadyChained;
@@ -396,7 +397,7 @@ namespace Promise2 {
       public:
         ChainingMutex(std::atomic<std::uint32_t> *flags)
           : _flags{ flags }
-          , _alreadyChained{ false }
+          , alreadyChained{ false }
         {}
 
 
