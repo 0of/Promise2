@@ -254,6 +254,7 @@ namespace Promise2 {
         , _status { Status::Running }
         , _forwardNotify{}
       {}
+
       virtual ~Forward() {
         if (_chainedFlag.load() == ChainedFlag::No) {
           _forwardTrait.onDestructing();
@@ -374,6 +375,72 @@ namespace Promise2 {
 
           break;
         }
+      }
+    };
+
+    template<typename ForwardType, template<typename T> class ForwardTrait>
+    class MultiChainForward : public Forward<ForwardType, ForwardTrait> {
+      using Base = Forward<ForwardType, ForwardTrait>;
+
+    private:
+      std::atomic<std::uint32_t> _flags;
+
+    private:
+      class ChainingMutex {
+      private:
+        std::atomic<std::uint32_t> *_flags;
+      public:
+        // modified when lock
+        bool alreadyChained;
+
+      public:
+        ChainingMutex(std::atomic<std::uint32_t> *flags)
+          : _flags{ flags }
+          , _alreadyChained{ false }
+        {}
+
+
+      public:
+        void lock() {
+
+        }
+
+        void unlock() noexcept {
+          
+        }
+      };
+
+      class NotifyMutex {
+      private:
+        std::atomic<std::uint32_t> *_flags;
+
+      public:
+        NotifyMutex(std::atomic<std::uint32_t> *flags)
+          : _flags{ flags }
+        {}
+
+      public:
+        void lock() {
+
+        }
+
+        void unlock() noexcept {
+          
+        }
+      };
+
+    public:
+      virtual void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
+        Base::doChaining(nextForward);
+      }
+
+      virtual void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
+        Base::doChaining(std::move(notify));
+      }
+
+    protected:
+      virtual void notify(const SharedPromiseValue<ForwardType>& value) {
+        
       }
     };
 
