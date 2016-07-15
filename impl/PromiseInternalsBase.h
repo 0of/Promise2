@@ -264,16 +264,7 @@ namespace Promise2 {
     public:
       virtual void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
         // move the notify before enter the critical section
-        _forwardNotify = [=](const SharedPromiseValue<ForwardType>& valuePromise){
-          if (!valuePromise->hasAssigned())
-            throw std::logic_error("invalid promise state");
-
-          if (valuePromise->isExceptionCase()) {
-            nextForward->reject(valuePromise->fetchException());
-          } else {
-            nextForward->fulfill(valuePromise->template getValue<ForwardType>());
-          }
-        };
+        _forwardNotify = std::move(getDeferForwardNotify(nextForward));
 
         chaining();
       }
@@ -356,6 +347,19 @@ namespace Promise2 {
         _forwardNotify(value);
       }
 
+      auto getDeferForwardNotify(const DeferPromiseCore<ForwardType>& nextForward) {
+        return [=](const SharedPromiseValue<ForwardType>& valuePromise){
+          if (!valuePromise->hasAssigned())
+            throw std::logic_error("invalid promise state");
+
+          if (valuePromise->isExceptionCase()) {
+            nextForward->reject(valuePromise->fetchException());
+          } else {
+            nextForward->fulfill(valuePromise->template getValue<ForwardType>());
+          }
+        };
+      }
+
     private:
       // thread safe chaining
       void chaining() {
@@ -400,7 +404,6 @@ namespace Promise2 {
           , alreadyChained{ false }
         {}
 
-
       public:
         void lock() {
 
@@ -432,16 +435,33 @@ namespace Promise2 {
 
     public:
       virtual void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
-        Base::doChaining(nextForward);
+        ChainingMutex mutex{ &_flags };
+        std::lock_guard<ChainingMutex> _{ mutex };
+
+        if (mutex.alreadyChained) {
+           _forwardNotify = std::move(getDeferForwardNotify(nextForward));
+        } else {
+          Base::doChaining(nextForward);
+        }
       }
 
       virtual void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
-        Base::doChaining(std::move(notify));
+        ChainingMutex mutex{ &_flags };
+        std::lock_guard<ChainingMutex> _{ mutex };
+
+        if (mutex.alreadyChained) {
+          _forwardNotify = std::move(notify);
+        } else {
+          Base::doChaining(std::move(notify));
+        }
       }
 
     protected:
       virtual void notify(const SharedPromiseValue<ForwardType>& value) {
-        
+        NotifyMutex mutex{ &_flags };
+        std::lock_guard<NotifyMutex> _{ mutex };
+
+        _forwardNotify(value);
       }
     };
 
@@ -537,7 +557,7 @@ namespace Promise2 {
       RecursionPromiseNodeInternalBase(const std::shared_ptr<ThreadContext>& context)
         : RecursionPromiseNode<ReturnType>()
         , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
-        , _finishForward{ std::make_unique<Forward<Void, SingleValueForwardTrait>>() }
+        , _finishForward{ std::make_unique<MultiChainForward<Void, SingleValueForwardTrait>>() }
         , _context{ context }
       {}
 
