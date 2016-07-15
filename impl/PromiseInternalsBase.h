@@ -244,10 +244,12 @@ namespace Promise2 {
       std::atomic<ChainedFlag> _chainedFlag;
       Status _status;
 
+    protected:
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
+    private:
       ForwardTrait<ForwardType> _forwardTrait;
-
+   
     public:
       Forward()
         : _chainedFlag{ ChainedFlag::No }
