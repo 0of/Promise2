@@ -406,11 +406,17 @@ namespace Promise2 {
 
       public:
         void lock() {
+          std::uint32_t flag = 0;
 
+          while ((flag = _flags->fetch_or(0x1)) & 0x1) {
+            std::this_thread::yield();
+          }
+
+          alreadyChained = (flag & 0x10) == 0x10;
         }
 
         void unlock() noexcept {
-          
+          _flags->fetch_and(0x10);
         }
       };
 
@@ -425,11 +431,13 @@ namespace Promise2 {
 
       public:
         void lock() {
-
+          while (_flags->fetch_or(0x1) & 0x1) {
+            std::this_thread::yield();
+          }
         }
 
         void unlock() noexcept {
-          
+          _flags->fetch_and(0x10);
         }
       };
 
