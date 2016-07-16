@@ -244,10 +244,12 @@ namespace Promise2 {
       std::atomic<ChainedFlag> _chainedFlag;
       Status _status;
 
+    protected:
       std::function<void(const SharedPromiseValue<ForwardType>&)> _forwardNotify;
 
+    private:
       ForwardTrait<ForwardType> _forwardTrait;
-
+   
     public:
       Forward()
         : _chainedFlag{ ChainedFlag::No }
@@ -264,16 +266,7 @@ namespace Promise2 {
     public:
       virtual void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
         // move the notify before enter the critical section
-        _forwardNotify = [=](const SharedPromiseValue<ForwardType>& valuePromise){
-          if (!valuePromise->hasAssigned())
-            throw std::logic_error("invalid promise state");
-
-          if (valuePromise->isExceptionCase()) {
-            nextForward->reject(valuePromise->fetchException());
-          } else {
-            nextForward->fulfill(valuePromise->template getValue<ForwardType>());
-          }
-        };
+        _forwardNotify = std::move(getDeferForwardNotify(nextForward));
 
         chaining();
       }
@@ -356,6 +349,19 @@ namespace Promise2 {
         _forwardNotify(value);
       }
 
+      auto getDeferForwardNotify(const DeferPromiseCore<ForwardType>& nextForward) {
+        return [=](const SharedPromiseValue<ForwardType>& valuePromise){
+          if (!valuePromise->hasAssigned())
+            throw std::logic_error("invalid promise state");
+
+          if (valuePromise->isExceptionCase()) {
+            nextForward->reject(valuePromise->fetchException());
+          } else {
+            nextForward->fulfill(valuePromise->template getValue<ForwardType>());
+          }
+        };
+      }
+
     private:
       // thread safe chaining
       void chaining() {
@@ -400,14 +406,19 @@ namespace Promise2 {
           , alreadyChained{ false }
         {}
 
-
       public:
         void lock() {
+          std::uint32_t flag = 0;
 
+          while ((flag = _flags->fetch_or(0x1)) & 0x1) {
+            std::this_thread::yield();
+          }
+
+          alreadyChained = (flag & 0x10) == 0x10;
         }
 
         void unlock() noexcept {
-          
+          _flags->fetch_and(0x10);
         }
       };
 
@@ -422,26 +433,45 @@ namespace Promise2 {
 
       public:
         void lock() {
-
+          while (_flags->fetch_or(0x1) & 0x1) {
+            std::this_thread::yield();
+          }
         }
 
         void unlock() noexcept {
-          
+          _flags->fetch_and(0x10);
         }
       };
 
     public:
       virtual void doChaining(const DeferPromiseCore<ForwardType>& nextForward) {
-        Base::doChaining(nextForward);
+        ChainingMutex mutex{ &_flags };
+        std::lock_guard<ChainingMutex> _{ mutex };
+
+        if (mutex.alreadyChained) {
+          Base::_forwardNotify = std::move(getDeferForwardNotify(nextForward));
+        } else {
+          Base::doChaining(nextForward);
+        }
       }
 
       virtual void doChaining(std::function<void(const SharedPromiseValue<ForwardType>&)>&& notify) {
-        Base::doChaining(std::move(notify));
+        ChainingMutex mutex{ &_flags };
+        std::lock_guard<ChainingMutex> _{ mutex };
+
+        if (mutex.alreadyChained) {
+          Base::_forwardNotify = std::move(notify);
+        } else {
+          Base::doChaining(std::move(notify));
+        }
       }
 
     protected:
       virtual void notify(const SharedPromiseValue<ForwardType>& value) {
-        
+        NotifyMutex mutex{ &_flags };
+        std::lock_guard<NotifyMutex> _{ mutex };
+
+        _forwardNotify(value);
       }
     };
 
@@ -537,7 +567,7 @@ namespace Promise2 {
       RecursionPromiseNodeInternalBase(const std::shared_ptr<ThreadContext>& context)
         : RecursionPromiseNode<ReturnType>()
         , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
-        , _finishForward{ std::make_unique<Forward<Void, SingleValueForwardTrait>>() }
+        , _finishForward{ std::make_unique<MultiChainForward<Void, SingleValueForwardTrait>>() }
         , _context{ context }
       {}
 
