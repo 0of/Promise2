@@ -449,7 +449,7 @@ namespace Promise2 {
         std::lock_guard<ChainingMutex> _{ mutex };
 
         if (mutex.alreadyChained) {
-           _forwardNotify = std::move(getDeferForwardNotify(nextForward));
+          Base::_forwardNotify = std::move(getDeferForwardNotify(nextForward));
         } else {
           Base::doChaining(nextForward);
         }
@@ -460,7 +460,7 @@ namespace Promise2 {
         std::lock_guard<ChainingMutex> _{ mutex };
 
         if (mutex.alreadyChained) {
-          _forwardNotify = std::move(notify);
+          Base::_forwardNotify = std::move(notify);
         } else {
           Base::doChaining(std::move(notify));
         }
