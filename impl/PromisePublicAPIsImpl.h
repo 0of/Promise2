@@ -187,8 +187,8 @@ namespace Promise2 {
   }
 #endif // NESTING_PROMISE
 
-  template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
-  template<typename T> bool Promise<T>::isRejected() const CALL_NODE_IMP(isRejected)
+  template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
+  template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isRejected() const CALL_NODE_IMP(isRejected)
 
   template<typename T>
   template<typename ArgType>
