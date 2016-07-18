@@ -187,6 +187,16 @@ namespace Promise2 {
   }
 #endif // NESTING_PROMISE
 
+  template<typename T>
+  template<typename NextT, typename ConvertibleT>
+  RecursionPromise<UnboxVoid<NextT>> RecursionPromiseThenable<T>::Then(SharedRecursionPromiseNode<T>& node,
+                                                                       std::function<NextT(ConvertibleT)>&& onFulfill,
+                                                                       OnRecursionRejectFunction<NextT>&& onReject,
+                                                                       ThreadContext* &&context) {
+    // TODO
+    return RecursionPromise<UnboxVoid<NextT>>{};
+  }
+
   template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
   template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isRejected() const CALL_NODE_IMP(isRejected)
 

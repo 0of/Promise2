@@ -329,6 +329,51 @@ namespace Promise2 {
       return Base::then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
+
+  //
+  // @class RecursionPromise
+  //
+  template<typename T>
+  class RecursionPromise : public GenericPromise<SharedRecursionPromiseNode<T>>, 
+                           public PromiseRecursible<T> {
+  private:    
+    using Base = GenericPromise<SharedRecursionPromiseNode<T>>;
+    using Thenable = RecursionPromiseThenable<BoxVoid<T>>;
+    using FinalThenable = PromiseThenable<Void>;
+    using SelfType = RecursionPromise<T>;
+
+  public:
+    using PromiseType = T;
+
+  public:
+    // empty constructor
+    RecursionPromise() = default;
+
+    // copy constructor
+    RecursionPromise(const SelfType& ) = default;
+    // move constructor
+    RecursionPromise(SelfType&& ) = default;
+
+    SelfType& operator = (const SelfType& ) = default;
+    SelfType& operator = (SelfType&& ) = default;
+
+  public:
+    // 
+    template<typename OnFulfill, typename OnReject>
+    auto then(OnFulfill&& onFulfill,
+              OnReject&& onReject, 
+              ThreadContext* &&context) {
+      return Base::then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+    }
+
+    // OnFulfill -> void(void)
+    template<typename OnFulfill, typename OnReject>
+    void final(OnFulfill&& onFulfill,
+               OnReject&& onReject, 
+               ThreadContext* &&context) {
+      return Base::then<FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+    }
+  };
 }
  
 #endif // PROMISE_PUBLIC_APIS_H
