@@ -38,6 +38,7 @@ namespace Promise2 {
   // declarations
   namespace Details {
     template<typename T> class PromiseNode;
+    template<typename T> class RecursionPromiseNode;
     template<typename T, template<typename K> class ForwardTrait> class Forward;
     template<typename ForwardType> class SingleValueForwardTrait;
     template<typename ForwardType> class MultiValueForwardTrait;
@@ -49,6 +50,7 @@ namespace Promise2 {
   template<typename T> class Promise;
   template<typename T> class RecursionPromise;
   template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<BoxVoid<T>>>;
+  template<typename T> using SharedRecursionPromiseNode = std::shared_ptr<Details::RecursionPromiseNode<BoxVoid<T>>>;
   template<typename T> using OnRejectFunction = std::function<Promise<UnboxVoid<T>>(std::exception_ptr)>;
   template<typename T> using OnRecursionRejectFunction = std::function<RecursionPromise<UnboxVoid<T>>(std::exception_ptr)>;
   // !
@@ -165,23 +167,23 @@ namespace Promise2 {
   template<typename T>
   class PromiseThenable {
   public:
-    template<typename NextT, typename ConvertibleT>
-    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
-                               std::function<NextT(ConvertibleT)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
+    template<class SharedNode, typename NextT, typename ConvertibleT>
+    static Promise<UnboxVoid<NextT>> Then(SharedNode& node,
+                                          std::function<NextT(ConvertibleT)>&& onFulfill,
+                                          OnRejectFunction<NextT>&& onReject, 
+                                          ThreadContext* &&context);
 
-    template<typename NextT, typename ConvertibleT>
-    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
-                               std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
+    template<class SharedNode, typename NextT, typename ConvertibleT>
+    static Promise<UnboxVoid<NextT>> Then(SharedNode& node,
+                                          std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
+                                          OnRejectFunction<NextT>&& onReject, 
+                                          ThreadContext* &&context);
 
-    template<typename NextT, typename ConvertibleT>
-    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node, 
-                               std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
+    template<class SharedNode, typename NextT, typename ConvertibleT>
+    static Promise<UnboxVoid<NextT>> Then(SharedNode& node, 
+                                          std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
+                                          OnRejectFunction<NextT>&& onReject, 
+                                          ThreadContext* &&context);
 
     // matching nothing
     template<typename NonMatching> static auto Then(...) -> std::false_type;
@@ -194,7 +196,17 @@ namespace Promise2 {
     // iterator must implements std::input_iterator_tag supported operations
     // and under multi-threads context(recursion state pass to the receiver i.e. thenable promise) equality check and increment operation must be atomic
     template<class InputIterator>
-    static Promise<T> Iterate(InputIterator begin, InputIterator end);
+    static RecursionPromise<T> Iterate(InputIterator begin, InputIterator end);
+  };
+
+  template<typename T>
+  class RecursionPromiseThenable {
+  public:
+    template<typename NextT, typename ConvertibleT>
+    static RecursionPromise<UnboxVoid<NextT>> Then(SharedRecursionPromiseNode<T>& node,
+                                                   std::function<NextT(ConvertibleT)>&& onFulfill,
+                                                   OnRecursionRejectFunction<NextT>&& onReject, 
+                                                   ThreadContext* &&context);
   };
 
 #if ONREJECT_IMPLICITLY_RESOLVED
@@ -235,40 +247,16 @@ namespace Promise2 {
     static auto eliminate(std::function<ReturnType(ArgsType...)>&&, std::enable_if_t<IsKindOfDefer<ArgsType...>::value, Void>);
   };
 
-  //
-  // @class Promise
-  //
-  template<typename T>
-  class Promise : public PromiseSpawner<T>, public PromiseResolveSpawner<T> {
-    template<typename Type> friend class PromiseThenable;
-    template<typename Type> friend class PromiseResolveSpawner;
-
-  private:    
-    using Thenable = PromiseThenable<BoxVoid<T>>;
-    using SelfType = Promise<T>;
-
-    friend class PromiseSpawner<T>;
-
-  public:
-    using PromiseType = T;
-
+  template<typename SharedPromiseNodeType>
+  class GenericPromise {
   private:
-    SharedPromiseNode<T> _node;
+    using SelfType = GenericPromise<SharedPromiseNodeType>;
 
-  public:
-    // empty constructor
-    Promise() = default;
+  protected:
+    SharedPromiseNodeType _node;
 
-    // copy constructor
-    Promise(const SelfType& ) = default;
-    // move constructor
-    Promise(SelfType&& ) = default;
-
-    SelfType& operator = (const SelfType& ) = default;
-    SelfType& operator = (SelfType&& ) = default;
-
-  public:
-    template<typename OnFulfill, typename OnReject>
+  protected:
+    template<typename Thenable, typename OnFulfill, typename OnReject>
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
@@ -288,7 +276,7 @@ namespace Promise2 {
       if (!isValid()) throw std::logic_error("invalid promise");
       return Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context));
     }
-    
+
   public:
     bool isValid() const {
       return !!_node;
@@ -299,17 +287,93 @@ namespace Promise2 {
     bool isRejected() const;
 
   public:
-    inline SharedPromiseNode<T> internal() const { return _node; }
+    inline SharedPromiseNodeType internal() const { return _node; }
+  };
+
+  //
+  // @class Promise
+  //
+  template<typename T>
+  class Promise : public GenericPromise<SharedPromiseNode<T>>, 
+                  public PromiseSpawner<T>, 
+                  public PromiseResolveSpawner<T> {
+    template<typename Type> friend class PromiseThenable;
+    template<typename Type> friend class PromiseResolveSpawner;
+
+  private:
+    using Base = GenericPromise<SharedPromiseNode<T>>;
+    using Thenable = PromiseThenable<BoxVoid<T>>;
+    using SelfType = Promise<T>;
+
+    friend class PromiseSpawner<T>;
+
+  public:
+    using PromiseType = T;
+
+  public:
+    // empty constructor
+    Promise() = default;
+
+    // copy constructor
+    Promise(const SelfType& ) = default;
+    // move constructor
+    Promise(SelfType&& ) = default;
+
+    SelfType& operator = (const SelfType& ) = default;
+    SelfType& operator = (SelfType&& ) = default;
+
+  public:
+    template<typename OnFulfill, typename OnReject>
+    auto then(OnFulfill&& onFulfill,
+              OnReject&& onReject, 
+              ThreadContext* &&context) {
+      return Base::template then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+    }
   };
 
   //
   // @class RecursionPromise
   //
   template<typename T>
-  class RecursionPromise {
+  class RecursionPromise : public GenericPromise<SharedRecursionPromiseNode<T>>, 
+                           public PromiseRecursible<T> {
+  private:    
+    using Base = GenericPromise<SharedRecursionPromiseNode<T>>;
+    using Thenable = RecursionPromiseThenable<BoxVoid<T>>;
+    using FinalThenable = PromiseThenable<Void>;
+    using SelfType = RecursionPromise<T>;
+
   public:
-    void eachThen();
-    void finishedThen();
+    using PromiseType = T;
+
+  public:
+    // empty constructor
+    RecursionPromise() = default;
+
+    // copy constructor
+    RecursionPromise(const SelfType& ) = default;
+    // move constructor
+    RecursionPromise(SelfType&& ) = default;
+
+    SelfType& operator = (const SelfType& ) = default;
+    SelfType& operator = (SelfType&& ) = default;
+
+  public:
+    // 
+    template<typename OnFulfill, typename OnReject>
+    auto then(OnFulfill&& onFulfill,
+              OnReject&& onReject, 
+              ThreadContext* &&context) {
+      return Base::template then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+    }
+
+    // OnFulfill -> void(void)
+    template<typename OnFulfill, typename OnReject>
+    void final(OnFulfill&& onFulfill,
+               OnReject&& onReject, 
+               ThreadContext* &&context) {
+      return Base::template then<FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+    }
   };
 }
  

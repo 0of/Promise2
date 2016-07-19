@@ -142,53 +142,63 @@ namespace Promise2 {
 #endif // NESTING_PROMISE
 
   template<typename T>
-  template<typename NextT, typename ConvertibleT>
-  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-                             std::function<NextT(ConvertibleT)>&& onFulfill,
-                             OnRejectFunction<NextT>&& onReject,
-                             ThreadContext* &&context) 
+  template<class SharedNode, typename NextT, typename ConvertibleT>
+  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedNode& node,
+                                                     std::function<NextT(ConvertibleT)>&& onFulfill,
+                                                     OnRejectFunction<NextT>&& onReject,
+                                                     ThreadContext* &&context) 
     THEN_IMP(Details::PromiseNodeInternal, T, ConvertibleT, ArgTypePred)
 
 #if DEFERRED_PROMISE
   template<typename T>
-  template<typename NextT, typename ConvertibleT>
-  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-                             std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
-                             OnRejectFunction<NextT>&& onReject,
-                             ThreadContext* &&context)
+  template<class SharedNode, typename NextT, typename ConvertibleT>
+  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedNode& node,
+                                                     std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
+                                                     OnRejectFunction<NextT>&& onReject,
+                                                     ThreadContext* &&context)
     THEN_IMP(Details::DeferredPromiseNodeInternal, T, ConvertibleT, GivenArgTypePred<PromiseDefer<NextT>&&>)
 #else
   template<typename T>
-  template<typename NextT, typename ConvertibleT>
-  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-                             std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
-                             OnRejectFunction&& onReject, 
-                             ThreadContext* &&context) {
+  template<class SharedNode, typename NextT, typename ConvertibleT>
+  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedNode& node,
+                                                     std::function<void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
+                                                     OnRejectFunction&& onReject, 
+                                                     ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `DEFERRED_PROMISE` in `PromiseConfig.h`");
   }
 #endif // DEFERRED_PROMISE
 
 #if NESTING_PROMISE
   template<typename T>
-  template<typename NextT, typename ConvertibleT>
-  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-                             std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
-                             OnRejectFunction<NextT>&& onReject,
-                             ThreadContext* &&context)
+  template<class SharedNode, typename NextT, typename ConvertibleT>
+  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedNode& node,
+                                                     std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
+                                                     OnRejectFunction<NextT>&& onReject,
+                                                     ThreadContext* &&context)
     THEN_IMP(Details::NestingPromiseNodeInternal, T, ConvertibleT, ArgTypePred)
 #else
   template<typename T>
-  template<typename NextT, typename ConvertibleT>
-  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedPromiseNode<T>& node,
-                             std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
-                             OnRejectFunction<NextT>&& onReject,
-                             ThreadContext* &&context) {
+  template<class SharedNode, typename NextT, typename ConvertibleT>
+  Promise<UnboxVoid<NextT>> PromiseThenable<T>::Then(SharedNode& node,
+                                                     std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
+                                                     OnRejectFunction<NextT>&& onReject,
+                                                     ThreadContext* &&context) {
     static_assert(falsehood<NextT>::value, "please enable `NESTING_PROMISE` in `PromiseConfig.h`");
   }
 #endif // NESTING_PROMISE
 
-  template<typename T> bool Promise<T>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
-  template<typename T> bool Promise<T>::isRejected() const CALL_NODE_IMP(isRejected)
+  template<typename T>
+  template<typename NextT, typename ConvertibleT>
+  RecursionPromise<UnboxVoid<NextT>> RecursionPromiseThenable<T>::Then(SharedRecursionPromiseNode<T>& node,
+                                                                       std::function<NextT(ConvertibleT)>&& onFulfill,
+                                                                       OnRecursionRejectFunction<NextT>&& onReject,
+                                                                       ThreadContext* &&context) {
+    // TODO
+    return RecursionPromise<UnboxVoid<NextT>>{};
+  }
+
+  template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
+  template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isRejected() const CALL_NODE_IMP(isRejected)
 
   template<typename T>
   template<typename ArgType>
