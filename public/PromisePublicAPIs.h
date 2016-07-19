@@ -38,6 +38,7 @@ namespace Promise2 {
   // declarations
   namespace Details {
     template<typename T> class PromiseNode;
+    template<typename T> class RecursionPromiseNode;
     template<typename T, template<typename K> class ForwardTrait> class Forward;
     template<typename ForwardType> class SingleValueForwardTrait;
     template<typename ForwardType> class MultiValueForwardTrait;
@@ -166,23 +167,23 @@ namespace Promise2 {
   template<typename T>
   class PromiseThenable {
   public:
-    template<typename NextT, typename ConvertibleT>
-    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
-                               std::function<NextT(ConvertibleT)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
+    template<class SharedNode, typename NextT, typename ConvertibleT>
+    static Promise<UnboxVoid<NextT>> Then(SharedNode& node,
+                                          std::function<NextT(ConvertibleT)>&& onFulfill,
+                                          OnRejectFunction<NextT>&& onReject, 
+                                          ThreadContext* &&context);
 
-    template<typename NextT, typename ConvertibleT>
-    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node,
-                               std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
+    template<class SharedNode, typename NextT, typename ConvertibleT>
+    static Promise<UnboxVoid<NextT>> Then(SharedNode& node,
+                                          std::function<Void(PromiseDefer<NextT>&&, ConvertibleT)>&& onFulfill,
+                                          OnRejectFunction<NextT>&& onReject, 
+                                          ThreadContext* &&context);
 
-    template<typename NextT, typename ConvertibleT>
-    static Promise<UnboxVoid<NextT>> Then(SharedPromiseNode<T>& node, 
-                               std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
-                               OnRejectFunction<NextT>&& onReject, 
-                               ThreadContext* &&context);
+    template<class SharedNode, typename NextT, typename ConvertibleT>
+    static Promise<UnboxVoid<NextT>> Then(SharedNode& node, 
+                                          std::function<Promise<UnboxVoid<NextT>>(ConvertibleT)>&& onFulfill,
+                                          OnRejectFunction<NextT>&& onReject, 
+                                          ThreadContext* &&context);
 
     // matching nothing
     template<typename NonMatching> static auto Then(...) -> std::false_type;
@@ -326,7 +327,7 @@ namespace Promise2 {
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
-      return Base::then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
 
@@ -363,7 +364,7 @@ namespace Promise2 {
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
-      return Base::then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
 
     // OnFulfill -> void(void)
@@ -371,7 +372,7 @@ namespace Promise2 {
     void final(OnFulfill&& onFulfill,
                OnReject&& onReject, 
                ThreadContext* &&context) {
-      return Base::then<FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
 }
