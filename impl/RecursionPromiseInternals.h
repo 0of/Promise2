@@ -29,7 +29,7 @@ namespace Promise2 {
     public:
       RecursionPromiseNodeInternal(const InputIterator& begin,
                                    const InputIterator& end,
-                                   OnRejectFunction<ReturnType>&& onReject,
+                                   OnRecursionRejectFunction<ReturnType>&& onReject,
                                    const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
         , _iter{ begin }

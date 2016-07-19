@@ -196,7 +196,7 @@ namespace Promise2 {
     // iterator must implements std::input_iterator_tag supported operations
     // and under multi-threads context(recursion state pass to the receiver i.e. thenable promise) equality check and increment operation must be atomic
     template<class InputIterator>
-    static RecursionPromise<T> Iterate(InputIterator begin, InputIterator end);
+    static RecursionPromise<T> Iterate(InputIterator begin, InputIterator end, ThreadContext* &&context);
   };
 
   template<typename T>
