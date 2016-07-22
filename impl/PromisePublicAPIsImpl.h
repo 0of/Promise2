@@ -14,6 +14,7 @@
 #endif
 
 #include "ResolvedRejectedPromiseInternals.h"
+#include "RecursionPromiseInternals.h"
 
 namespace Promise2 {
 
@@ -246,6 +247,22 @@ namespace Promise2 {
     Promise<void> spawned;
     auto node = std::make_shared<Details::ResolvedRejectedPromiseInternals<Void>>(e);
     spawned._node = node;
+
+    return spawned;
+  }
+
+  template<typename T>
+  template<class InputIterator>
+  RecursionPromise<T> PromiseRecursible<T>::Iterate(InputIterator begin, InputIterator end, ThreadContext* &&context) {
+    using Internal = Details::RecursionPromiseNodeInternal<T, Void, Void, std::true_type, InputIterator>;
+    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context));
+
+    RecursionPromise<T> spawned;
+    auto node = std::make_shared<Internal>(begin, end, std::function<RecursionPromise<T>(std::exception_ptr)>(), sharedContext);
+    spawned._node = node;
+
+    auto runnable = std::bind(&Internal::start, node);
+    sharedContext->scheduleToRun(std::move(runnable));
 
     return spawned;
   }
