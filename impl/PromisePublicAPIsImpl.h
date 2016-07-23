@@ -82,6 +82,23 @@ namespace Promise2 {
     nextPromise._node = nextNode; \
     return nextPromise; }
 
+#define RECUR_THEN_IMPL(internal, T, ConvertibleT, ArgPred) \
+  { static_assert(std::is_convertible<T, ConvertibleT>::value, "implicitly argument type conversion failed"); \
+    using Internal = internal<BoxVoid<NextT>, BoxVoid<T>, BoxVoid<ConvertibleT>, std::false_type, true>; \
+    auto sharedContext = std::shared_ptr<ThreadContext>(std::move(context)); \
+    auto nextNode = std::make_shared<Internal>(std::move(onFulfill), std::move(onReject), sharedContext); \
+    node->chainRecursionNext([=](const Details::SharedPromiseValue<BoxVoid<T>>& v) { \
+      auto runnable = std::bind(&Internal::runWith, nextNode, v); \
+      sharedContext->scheduleToRun(std::move(runnable)); \
+    }, [=](const Details::SharedPromiseValue<Void>& v) { \
+      auto runnable = std::bind(&Internal::finish, nextNode, v); \
+      sharedContext->scheduleToRun(std::move(runnable)); \
+    }); \
+    \
+    RecursionPromise<UnboxVoid<NextT>> nextPromise; \
+    nextPromise._node = nextNode; \
+    return nextPromise; }
+
 #define CALL_NODE_IMP(method) \
     { if (!_node) { \
         throw std::logic_error("invalid promise"); \
@@ -193,10 +210,8 @@ namespace Promise2 {
   RecursionPromise<UnboxVoid<NextT>> RecursionPromiseThenable<T>::Then(SharedRecursionPromiseNode<T>& node,
                                                                        std::function<NextT(ConvertibleT)>&& onFulfill,
                                                                        OnRecursionRejectFunction<NextT>&& onReject,
-                                                                       ThreadContext* &&context) {
-    // TODO
-    return RecursionPromise<UnboxVoid<NextT>>{};
-  }
+                                                                       ThreadContext* &&context) 
+    RECUR_THEN_IMPL(Details::PromiseNodeInternal, T, ConvertibleT, ArgTypePred)
 
   template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isFulfilled() const CALL_NODE_IMP(isFulfilled)
   template<typename SharedPromiseNodeType> bool GenericPromise<SharedPromiseNodeType>::isRejected() const CALL_NODE_IMP(isRejected)

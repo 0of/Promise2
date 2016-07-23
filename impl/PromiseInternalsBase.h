@@ -649,8 +649,10 @@ namespace Promise2 {
     //
     // Promise node
     //
-    template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type>
-    class PromiseNodeInternal : public PromiseNodeInternalBase<ReturnType, ArgType, IsTask> {
+    template<typename ReturnType, typename ArgType, typename ConvertibleArgType, typename IsTask = std::false_type, bool IsRecursion = false>
+    class PromiseNodeInternal : public std::conditional_t<IsRecursion, 
+                                                         RecursionPromiseNodeInternalBase<ReturnType, ArgType, IsTask>,
+                                                         PromiseNodeInternalBase<ReturnType, ArgType, IsTask>> {
       using Base = PromiseNodeInternalBase<ReturnType, ArgType, IsTask>;
 
     private:
