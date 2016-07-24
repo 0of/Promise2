@@ -449,7 +449,7 @@ namespace Promise2 {
         std::lock_guard<ChainingMutex> _{ mutex };
 
         if (mutex.alreadyChained) {
-          Base::_forwardNotify = std::move(getDeferForwardNotify(nextForward));
+          Base::_forwardNotify = std::move(this->getDeferForwardNotify(nextForward));
         } else {
           Base::doChaining(nextForward);
         }
@@ -471,7 +471,7 @@ namespace Promise2 {
         NotifyMutex mutex{ &_flags };
         std::lock_guard<NotifyMutex> _{ mutex };
 
-        _forwardNotify(value);
+        this->_forwardNotify(value);
       }
     };
 
@@ -564,18 +564,20 @@ namespace Promise2 {
       OnRecursionRejectFunction<ReturnType> _onReject;
 
     protected:
-      RecursionPromiseNodeInternalBase(const std::shared_ptr<ThreadContext>& context)
+      RecursionPromiseNodeInternalBase(OnRecursionRejectFunction<ReturnType>&& onReject, 
+                                       const std::shared_ptr<ThreadContext>& context)
         : RecursionPromiseNode<ReturnType>()
         , _forward{ std::make_unique<Forward<ReturnType, MultiValueForwardTrait>>() }
         , _finishForward{ std::make_unique<MultiChainForward<Void, SingleValueForwardTrait>>() }
         , _context{ context }
+        , _onReject{ std::move(onReject) }
       {}
 
     public:
       virtual void chainRecursionNext(std::function<void(const SharedPromiseValue<ReturnType>&)>&& notify,
                                       std::function<void(const SharedPromiseValue<Void>&)>&& notifyWhenFinished) override {
 
-        _forward->doChaining(notify);
+        _forward->doChaining(std::move(notify));
         _finishForward->doChaining(std::move(notifyWhenFinished));
       }
 
@@ -616,23 +618,6 @@ namespace Promise2 {
         this->runWith(nullptr);
       }
 
-    protected:
-      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
-
-      // called when exception has been thrown
-      void runReject() noexcept {
-        if (_onReject) {
-          try {
-            // chain the returned promise
-            _onReject(std::current_exception()).internal()->chainNext(_forward);
-          } catch (...) {
-            _forward->reject(std::current_exception());
-          }
-        } else {
-          _forward->reject(std::current_exception());
-        }
-      }
-
       void finish(const SharedPromiseValue<Void>& value) {
         Fulfillment<Void, std::false_type> fulfillment { value };
         try {
@@ -644,6 +629,23 @@ namespace Promise2 {
 
         _finishForward->fulfill(Void{});
       }
+
+    protected:
+      virtual void onRun(Fulfillment<ArgType, IsTask>& fulfillment) noexcept {}
+
+      // called when exception has been thrown
+      void runReject() noexcept {
+        if (_onReject) {
+          try {
+            // chain the returned promise
+            _onReject(std::current_exception()).internal()->chainRecursionNext(_forward);
+          } catch (...) {
+            _forward->reject(std::current_exception());
+          }
+        } else {
+          _forward->reject(std::current_exception());
+        }
+      }
     };
 
     //
@@ -653,15 +655,18 @@ namespace Promise2 {
     class PromiseNodeInternal : public std::conditional_t<IsRecursion, 
                                                          RecursionPromiseNodeInternalBase<ReturnType, ArgType, IsTask>,
                                                          PromiseNodeInternalBase<ReturnType, ArgType, IsTask>> {
-      using Base = PromiseNodeInternalBase<ReturnType, ArgType, IsTask>;
+      using Base = std::conditional_t<IsRecursion,
+                                     RecursionPromiseNodeInternalBase<ReturnType, ArgType, IsTask>,
+                                     PromiseNodeInternalBase<ReturnType, ArgType, IsTask>>;
 
     private:
       std::function<ReturnType(ConvertibleArgType)> _onFulfill;
 
     public:
+      template<typename OnRejectFn>
       PromiseNodeInternal(std::function<ReturnType(ConvertibleArgType)>&& onFulfill,
-                  OnRejectFunction<ReturnType>&& onReject,
-                  const std::shared_ptr<ThreadContext>& context)
+                          OnRejectFn&& onReject,
+                          const std::shared_ptr<ThreadContext>& context)
         : Base(std::move(onReject), context)
         , _onFulfill{ std::move(onFulfill) }
       {}

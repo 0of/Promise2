@@ -300,12 +300,12 @@ namespace Promise2 {
     template<typename Type> friend class PromiseThenable;
     template<typename Type> friend class PromiseResolveSpawner;
 
+    friend class PromiseSpawner<T>;
+
   private:
     using Base = GenericPromise<SharedPromiseNode<T>>;
     using Thenable = PromiseThenable<BoxVoid<T>>;
     using SelfType = Promise<T>;
-
-    friend class PromiseSpawner<T>;
 
   public:
     using PromiseType = T;
@@ -337,7 +337,12 @@ namespace Promise2 {
   template<typename T>
   class RecursionPromise : public GenericPromise<SharedRecursionPromiseNode<T>>, 
                            public PromiseRecursible<T> {
-  private:    
+
+      template<typename Type> friend class RecursionPromiseThenable;
+      template<typename Type> friend class PromiseThenable;
+      friend class PromiseRecursible<T>;
+
+  private:
     using Base = GenericPromise<SharedRecursionPromiseNode<T>>;
     using Thenable = RecursionPromiseThenable<BoxVoid<T>>;
     using FinalThenable = PromiseThenable<Void>;
@@ -369,7 +374,7 @@ namespace Promise2 {
 
     // OnFulfill -> void(void)
     template<typename OnFulfill, typename OnReject>
-    void final(OnFulfill&& onFulfill,
+    auto final(OnFulfill&& onFulfill,
                OnReject&& onReject, 
                ThreadContext* &&context) {
       return Base::template then<FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
