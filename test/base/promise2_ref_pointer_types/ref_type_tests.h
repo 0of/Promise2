@@ -20,9 +20,10 @@ namespace RefTypeBase {
         } 
 
         notifier->fail(std::make_exception_ptr(AssertionFailed()));
-      }, [=](std::exception_ptr) {
+      }, [=](std::exception_ptr e) {
         std::unique_ptr<int> p { valuePointer };
         notifier->fail(std::make_exception_ptr(AssertionFailed()));
+        return Promise2::Promise<void>::Rejected(e);
       }, CurrentContext::New());
     });
   }
