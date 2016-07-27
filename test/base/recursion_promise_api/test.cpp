@@ -56,6 +56,39 @@ namespace RecursionAPIsBase {
     }
   };
 
+  class UserExceptionIterator {
+  public:
+    static constexpr const std::int32_t max = 3;
+
+  private:
+    std::int32_t _index;
+
+  public:
+    UserExceptionIterator(bool end)
+      : _index { end? 3 : 0 }
+    {}
+
+  public:
+    bool operator == (const UserExceptionIterator& i) { return i._index == _index; }
+    // must
+    bool operator != (const UserExceptionIterator& i) { return i._index != _index; }
+
+    // must
+    UserExceptionIterator& operator++ () {
+      ++_index;
+      return *this;
+    }
+
+    // must
+    std::int32_t operator *() const {
+      if (_index > 0) {
+        throw UserException();
+      }
+
+      return _index;
+    }
+  };
+
   constexpr const std::int32_t UserIterator::max;
 
   template<typename T>
@@ -90,6 +123,20 @@ namespace RecursionAPIsBase {
       final([=]() { if (UserIterator::max == *counter) { notifier->done(); }
                     else notifier->fail(std::make_exception_ptr(AssertionFailed())); }, 
             [=](std::exception_ptr) { notifier->fail(std::make_exception_ptr(AssertionFailed())); return Promise2::Promise<void>(); },
+            new context());
+    })
+    /* ==> */ 
+    .it("should run only one time when deref throws exception", [](const LTest::SharedCaseEndNotifier& notifier){
+      auto counter = std::make_shared<std::int32_t>(0);
+      
+      Promise2::RecursionPromise<std::int32_t>::Iterate(UserExceptionIterator(false), UserExceptionIterator(true), new context()).
+      then([=](std::int32_t ) { ++*counter; }, 
+           [=](std::exception_ptr) { notifier->fail(std::make_exception_ptr(AssertionFailed())); return Promise2::RecursionPromise<void>(); },
+           new context()).
+      final([=]() { notifier->fail(std::make_exception_ptr(AssertionFailed())); }, 
+            [=](std::exception_ptr e) { if (1 == *counter ) { notifier->done(); }
+                                       else { notifier->fail(std::make_exception_ptr(AssertionFailed())); }
+                                       return Promise2::Promise<void>::Rejected(e); },
             new context());
     });
   }
