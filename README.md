@@ -231,6 +231,61 @@ try {
 }
 ```
 
+## Recursion Promise
+Recursion promise is kind of promise that iterates a loop inside the target context and every chained thenable(NOT chained by `final()`) will
+be fulfilled or rejected the same times as the iterator does. 
+
+However if exception occurred during iteration, the recursion is halted and notify the `onReject` chained by `final()`.
+
+Recursion Promise is designed for *event polling* or *channel consumer* and you just need to implement the *InputIterator* [concept](http://en.cppreference.com/w/cpp/concept/InputIterator)
+and instantiate a _RecursionPromise_ with `begin` and `end` iterators.
+
+Currently these operator implementations are required:
+- `pre-increment`
+- `deref`
+- `not-equal`
+
+```c++
+class EventPollIterator {
+private:
+  ConsumerChan chan;
+
+public:
+  EventPollIterator() = default;
+  template<typename String>
+  EventPollIterator(String&& opts) 
+    :chan { ConsumerChan::New(std::forward<String>(opts)) }
+  {}
+
+  bool operator != (const EventPollIterator& i) { return i.chan != chan; }
+
+  std::string operator *() {
+    return chan.value();
+  }
+
+  EventPollIterator& operator++ () {
+    if (chan.will_quit()) {
+      chan.reset();
+    } else {
+      // block to poll new event
+      chan.poll();
+    }
+
+    return *this;
+  }
+};
+
+using STLThreadContext = ThreadContextImpl::STL::DetachedThreadContext;
+
+Promise2::RecursionPromise<std::string>::Iterate(EventPollIterator("id"), EventPollIterator(), new STLThreadContext()).
+    then([=](std::string ev) { std::cout << ev; }, 
+          [=](std::exception_ptr ) { return Promise2::RecursionPromise<void>(); },
+          new UserContext()).
+    final([=]() { std::cout << "chan finished!" }
+          [=](std::exception_ptr e) { return Promise2::Promise<void>::Rejected(e); },
+          new context());
+```
+
 ## Working with Objective-c++
 - enable ARC(**add compiler option `-fobjc-arc` if not using Xcode**)
 - use `.mm` as your implement file extension
