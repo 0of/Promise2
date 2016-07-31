@@ -58,8 +58,38 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 - VS2015
 
 # Concept
+### OnFulfill
+*OnFulfill* is kind of function that will be invoked when previous promise has been fulfilled with such signatures `Return(Argument)` , and `void(PromiseDefer<Return>, Argument)` or
+`Promise<Return>(Argument)` for some async operations. 
+
+It is allowed to pass _static method_, _lambda expression_, _bind expression_ as function body.
+
+> The `Return` type must be same type as `OnReject` returned
+
+### OnReject
+*OnReject* is much similar to `OnFulfill` but *OnReject* is invoked when previous promise has been rejected(exception thrown).
+
+The signature of *OnReject* is `Promise<Return>(std::exception_ptr)` while `RecursionPromise<Return>(std::exception_ptr)` when involved with `RecursionPromise`
+
+> The `Return` type must be same type as `OnFulfill` returned.
+> Besides, you can just reject the return promise with the given argument `std::exception_ptr` or wrap a new one.
+
 ### Synchronous promise
 The promise is resolved by an instance of the given type `T` or rejected by an exception as soon as the `fulfill` or `reject` [callables](http://en.cppreference.com/w/cpp/concept/Callable) returned.
+
+### Recursion promise
+Recursion promise is kind of promise that iterates a loop inside the target context and every chained thenable(NOT chained by `final()`) will
+be fulfilled or rejected the same times as the iterator does. 
+
+However if exception occurred during iteration, the recursion is halted and notify the `onReject` chained by `final()`.
+
+Recursion Promise is designed for *event polling* or *channel consumer* and you just need to implement the *InputIterator* [concept](http://en.cppreference.com/w/cpp/concept/InputIterator)
+and instantiate a _RecursionPromise_ with `begin` and `end` iterators.
+
+Currently these operator implementations are required:
+- `pre-increment`
+- `deref`
+- `not-equal`
 
 ### Deferable promise
 The resolved state of the promise is not determinate by the time the `fulfill` [callables](http://en.cppreference.com/w/cpp/concept/Callable) returns. And it allows you to warp any asynchronous scatter operations into highly dense and clearly expressed code blocks.
@@ -232,19 +262,6 @@ try {
 ```
 
 ## Recursion Promise
-Recursion promise is kind of promise that iterates a loop inside the target context and every chained thenable(NOT chained by `final()`) will
-be fulfilled or rejected the same times as the iterator does. 
-
-However if exception occurred during iteration, the recursion is halted and notify the `onReject` chained by `final()`.
-
-Recursion Promise is designed for *event polling* or *channel consumer* and you just need to implement the *InputIterator* [concept](http://en.cppreference.com/w/cpp/concept/InputIterator)
-and instantiate a _RecursionPromise_ with `begin` and `end` iterators.
-
-Currently these operator implementations are required:
-- `pre-increment`
-- `deref`
-- `not-equal`
-
 ```c++
 class EventPollIterator {
 private:
