@@ -21,19 +21,20 @@ namespace Promise2 {
   template<typename T> struct falsehood : public std::false_type {};
 
 #if ONREJECT_IMPLICITLY_RESOLVED
-  template<typename T>
-  OnRejectFunction<T> OnRejectImplicitlyResolved<T>::wrapped(std::function<void(std::exception_ptr)>&& f) {
-    OnRejectFunction<T> wrapped = [reject = move(f)](std::exception_ptr e){
+  template<class PromiseType, typename T>
+  OnRejectFunctionGeneric<PromiseType, T> OnRejectImplicitlyResolved<PromiseType, T>::wrapped(std::function<void(std::exception_ptr)>&& f) {
+    auto wrapped = [reject = move(f)](std::exception_ptr e){
       reject(e);
-      return Promise<T>::Resolved(T());
+      return PromiseType{};
     };
     return std::move(wrapped);
   }
 
-  OnRejectFunction<void> OnRejectImplicitlyResolved<void>::wrapped(std::function<void(std::exception_ptr)>&& f) {
-    OnRejectFunction<void> wrapped = [reject = move(f)](std::exception_ptr e){
+  template<class PromiseType>
+  OnRejectFunctionGeneric<PromiseType, void> OnRejectImplicitlyResolved<PromiseType, void>::wrapped(std::function<void(std::exception_ptr)>&& f) {
+    auto wrapped = [reject = move(f)](std::exception_ptr e){
       reject(e);
-      return Promise<void>::Resolved();
+      return PromiseType{};
     };
     return std::move(wrapped);
   }
