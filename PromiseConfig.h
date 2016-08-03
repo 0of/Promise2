@@ -17,7 +17,7 @@
  * `onReject` resolved with default constructed type T if no `Promise<t>` explicitly provided
  */
 #ifndef ONREJECT_IMPLICITLY_RESOLVED
-# define ONREJECT_IMPLICITLY_RESOLVED 0
+# define ONREJECT_IMPLICITLY_RESOLVED 1
 #endif // ONREJECT_IMPLICITLY_RESOLVED
 
 

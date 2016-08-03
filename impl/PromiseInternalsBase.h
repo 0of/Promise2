@@ -536,8 +536,13 @@ namespace Promise2 {
       void runReject() noexcept {
         if (_onReject) {
           try {
-            // chain the returned promise
-            _onReject(std::current_exception()).internal()->chainNext(_forward);
+            // chain the returned promise only if valid 
+            auto p = _onReject(std::current_exception());
+            if (p.isValid()) {
+              p.internal()->chainNext(_forward);
+            } else {
+              _forward->reject(std::current_exception());
+            }
           } catch (...) {
             _forward->reject(std::current_exception());
           }
@@ -637,8 +642,13 @@ namespace Promise2 {
       void runReject() noexcept {
         if (_onReject) {
           try {
-            // chain the returned promise
-            _onReject(std::current_exception()).internal()->chainRecursionNext(_forward);
+            // chain the returned promise only if valid 
+            auto p = _onReject(std::current_exception());
+            if (p.isValid()) {
+              p.internal()->chainRecursionNext(_forward);
+            } else {
+              _forward->reject(std::current_exception());
+            }
           } catch (...) {
             _forward->reject(std::current_exception());
           }

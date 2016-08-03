@@ -51,14 +51,17 @@ namespace Promise2 {
   template<typename T> class RecursionPromise;
   template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<BoxVoid<T>>>;
   template<typename T> using SharedRecursionPromiseNode = std::shared_ptr<Details::RecursionPromiseNode<BoxVoid<T>>>;
-  template<typename T> using OnRejectFunction = std::function<Promise<UnboxVoid<T>>(std::exception_ptr)>;
-  template<typename T> using OnRecursionRejectFunction = std::function<RecursionPromise<UnboxVoid<T>>(std::exception_ptr)>;
+  template<template<typename T> class PromiseType, typename K> using OnRejectFunctionGeneric = std::function<PromiseType<UnboxVoid<K>>(std::exception_ptr)>;
+  template<typename T> using OnRejectFunction = OnRejectFunctionGeneric<Promise, T>;
+  template<typename T> using OnRecursionRejectFunction = OnRejectFunctionGeneric<RecursionPromise, T>;
   // !
 
   template<typename First, typename... Rest> using first_of = First;
   template<typename T, typename RecursionMode> using DeferCoreType = std::conditional_t<std::is_same<RecursionMode, std::true_type>::value, 
                                                                                             Details::DeferPromiseCore<T>,
                                                                                             Details::DeferPromiseCore<T>>;
+  struct PromiseTypeWrapper { template<typename T> using Type = Promise<T>; };
+  struct RecursionPromiseTypeWrapper { template<typename T> using Type = RecursionPromise<T>; };
 
   //
   // @class ThreadContext
@@ -210,20 +213,20 @@ namespace Promise2 {
   };
 
 #if ONREJECT_IMPLICITLY_RESOLVED
-  template<typename T>
+  template<template<typename T> class PromiseType, typename T>
   struct OnRejectImplicitlyResolved {
-    static OnRejectFunction<T> wrapped(std::function<void(std::exception_ptr)>&&);
+    static OnRejectFunctionGeneric<PromiseType, T> wrapped(std::function<void(std::exception_ptr)>&&);
 
-    static OnRejectFunction<T> wrapped(std::function<Promise<T>(std::exception_ptr)>&& f) { return std::move(f); }
+    static OnRejectFunctionGeneric<PromiseType, T> wrapped(std::function<PromiseType<T>(std::exception_ptr)>&& f) { return std::move(f); }
 
     static auto wrapped(...) -> std::false_type;
   };
 
-  template<>
-  struct OnRejectImplicitlyResolved<void> {
-    static OnRejectFunction<void> wrapped(std::function<void(std::exception_ptr)>&&);
+  template<template<typename T> class PromiseType>
+  struct OnRejectImplicitlyResolved<PromiseType, void> {
+    static OnRejectFunctionGeneric<PromiseType, void> wrapped(std::function<void(std::exception_ptr)>&&);
 
-    static OnRejectFunction<void> wrapped(std::function<Promise<void>(std::exception_ptr)>&& f) {
+    static OnRejectFunctionGeneric<PromiseType, void> wrapped(std::function<PromiseType<void>(std::exception_ptr)>&& f) {
       return std::move(f);
     }
 
@@ -256,7 +259,7 @@ namespace Promise2 {
     SharedPromiseNodeType _node;
 
   protected:
-    template<typename Thenable, typename OnFulfill, typename OnReject>
+    template<typename Wrapper, typename Thenable, typename OnFulfill, typename OnReject>
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
@@ -266,7 +269,7 @@ namespace Promise2 {
       auto onFulfillFn = VoidEliminator::eliminate(declfn(onFulfill){ std::move(onFulfill) }, Void{});
 
 #if ONREJECT_IMPLICITLY_RESOLVED
-      auto onRejectFn = OnRejectImplicitlyResolved<typename declfn(onFulfill)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
+      auto onRejectFn = OnRejectImplicitlyResolved<Wrapper::template Type, typename declfn(onFulfill)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
 #else
       auto onRejectFn = declfn(onReject) { std::move(onReject) };
 #endif // ONREJECT_IMPLICITLY_RESOLVED
@@ -289,6 +292,8 @@ namespace Promise2 {
   public:
     inline SharedPromiseNodeType internal() const { return _node; }
   };
+
+
 
   //
   // @class Promise
@@ -327,7 +332,7 @@ namespace Promise2 {
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
-      return Base::template then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<PromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
 
@@ -369,7 +374,7 @@ namespace Promise2 {
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
-      return Base::template then<Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<RecursionPromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
 
     // OnFulfill -> void(void)
@@ -377,7 +382,7 @@ namespace Promise2 {
     auto final(OnFulfill&& onFulfill,
                OnReject&& onReject, 
                ThreadContext* &&context) {
-      return Base::template then<FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<PromiseTypeWrapper, FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
 }
