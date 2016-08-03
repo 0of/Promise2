@@ -51,7 +51,7 @@ namespace Promise2 {
   template<typename T> class RecursionPromise;
   template<typename T> using SharedPromiseNode = std::shared_ptr<Details::PromiseNode<BoxVoid<T>>>;
   template<typename T> using SharedRecursionPromiseNode = std::shared_ptr<Details::RecursionPromiseNode<BoxVoid<T>>>;
-  template<template<typename T> class PromiseType, typename K> using OnRejectFunctionGeneric = std::function<PromiseType<UnboxVoid<T>>(std::exception_ptr)>;
+  template<template<typename T> class PromiseType, typename K> using OnRejectFunctionGeneric = std::function<PromiseType<UnboxVoid<K>>(std::exception_ptr)>;
   template<typename T> using OnRejectFunction = OnRejectFunctionGeneric<Promise, T>;
   template<typename T> using OnRecursionRejectFunction = OnRejectFunctionGeneric<RecursionPromise, T>;
   // !
@@ -60,6 +60,8 @@ namespace Promise2 {
   template<typename T, typename RecursionMode> using DeferCoreType = std::conditional_t<std::is_same<RecursionMode, std::true_type>::value, 
                                                                                             Details::DeferPromiseCore<T>,
                                                                                             Details::DeferPromiseCore<T>>;
+  struct PromiseTypeWrapper { template<typename T> using Type = Promise<T>; };
+  struct RecursionPromiseTypeWrapper { template<typename T> using Type = RecursionPromise<T>; };
 
   //
   // @class ThreadContext
@@ -257,7 +259,7 @@ namespace Promise2 {
     SharedPromiseNodeType _node;
 
   protected:
-    template<template<typename T> class PromiseType, typename Thenable, typename OnFulfill, typename OnReject>
+    template<typename Wrapper, typename Thenable, typename OnFulfill, typename OnReject>
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
@@ -267,7 +269,7 @@ namespace Promise2 {
       auto onFulfillFn = VoidEliminator::eliminate(declfn(onFulfill){ std::move(onFulfill) }, Void{});
 
 #if ONREJECT_IMPLICITLY_RESOLVED
-      auto onRejectFn = OnRejectImplicitlyResolved<PromiseType, typename declfn(onFulfill)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
+      auto onRejectFn = OnRejectImplicitlyResolved<Wrapper::template Type, typename declfn(onFulfill)::result_type>::wrapped(declfn(onReject) { std::move(onReject) });
 #else
       auto onRejectFn = declfn(onReject) { std::move(onReject) };
 #endif // ONREJECT_IMPLICITLY_RESOLVED
@@ -290,6 +292,8 @@ namespace Promise2 {
   public:
     inline SharedPromiseNodeType internal() const { return _node; }
   };
+
+
 
   //
   // @class Promise
@@ -328,7 +332,7 @@ namespace Promise2 {
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
-      return Base::template then<Promise, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<PromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
 
@@ -370,7 +374,7 @@ namespace Promise2 {
     auto then(OnFulfill&& onFulfill,
               OnReject&& onReject, 
               ThreadContext* &&context) {
-      return Base::template then<RecursionPromise, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<RecursionPromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
 
     // OnFulfill -> void(void)
@@ -378,7 +382,7 @@ namespace Promise2 {
     auto final(OnFulfill&& onFulfill,
                OnReject&& onReject, 
                ThreadContext* &&context) {
-      return Base::template then<Promise, FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+      return Base::template then<PromiseTypeWrapper, FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
   };
 }

@@ -21,20 +21,20 @@ namespace Promise2 {
   template<typename T> struct falsehood : public std::false_type {};
 
 #if ONREJECT_IMPLICITLY_RESOLVED
-  template<class PromiseType, typename T>
+  template<template<typename T> class PromiseType, typename T>
   OnRejectFunctionGeneric<PromiseType, T> OnRejectImplicitlyResolved<PromiseType, T>::wrapped(std::function<void(std::exception_ptr)>&& f) {
     auto wrapped = [reject = move(f)](std::exception_ptr e){
       reject(e);
-      return PromiseType{};
+      return PromiseType<T>{};
     };
     return std::move(wrapped);
   }
 
-  template<class PromiseType>
+  template<template<typename T> class PromiseType>
   OnRejectFunctionGeneric<PromiseType, void> OnRejectImplicitlyResolved<PromiseType, void>::wrapped(std::function<void(std::exception_ptr)>&& f) {
     auto wrapped = [reject = move(f)](std::exception_ptr e){
       reject(e);
-      return PromiseType{};
+      return PromiseType<void>{};
     };
     return std::move(wrapped);
   }
