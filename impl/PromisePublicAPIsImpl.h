@@ -23,20 +23,28 @@ namespace Promise2 {
 #if ONREJECT_IMPLICITLY_RESOLVED
   template<template<typename T> class PromiseType, typename T>
   OnRejectFunctionGeneric<PromiseType, T> OnRejectImplicitlyResolved<PromiseType, T>::wrapped(std::function<void(std::exception_ptr)>&& f) {
-    auto wrapped = [reject = move(f)](std::exception_ptr e){
-      reject(e);
-      return PromiseType<T>{};
-    };
-    return std::move(wrapped);
+    if (f) {
+      auto wrapped = [reject = move(f)](std::exception_ptr e){
+        reject(e);
+        return PromiseType<T>{};
+      };
+      return std::move(wrapped);
+    }
+
+    return OnRejectFunctionGeneric<PromiseType, T>{};
   }
 
   template<template<typename T> class PromiseType>
   OnRejectFunctionGeneric<PromiseType, void> OnRejectImplicitlyResolved<PromiseType, void>::wrapped(std::function<void(std::exception_ptr)>&& f) {
-    auto wrapped = [reject = move(f)](std::exception_ptr e){
-      reject(e);
-      return PromiseType<void>{};
-    };
-    return std::move(wrapped);
+    if (f) {
+      auto wrapped = [reject = move(f)](std::exception_ptr e){
+        reject(e);
+        return PromiseType<void>{};
+      };
+      return std::move(wrapped);
+    }
+
+    return OnRejectFunctionGeneric<PromiseType, void>{};
   }
 #endif // ONREJECT_IMPLICITLY_RESOLVED
 

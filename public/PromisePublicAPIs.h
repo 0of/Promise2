@@ -280,6 +280,14 @@ namespace Promise2 {
       return Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context));
     }
 
+    template<typename Wrapper, typename Thenable, typename OnFulfill>
+    auto fulfill(OnFulfill&& onFulfill,
+                 ThreadContext* &&context) {
+      return then<Wrapper, Thenable>(std::forward<OnFulfill>(onFulfill), 
+                                     OnRejectFunctionGeneric<Wrapper::template Type, typename declfn(onFulfill)::result_type>{},
+                                     std::move(context));
+    }
+
   public:
     bool isValid() const {
       return !!_node;
