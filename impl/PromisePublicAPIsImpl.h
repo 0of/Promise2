@@ -20,7 +20,6 @@ namespace Promise2 {
 
   template<typename T> struct falsehood : public std::false_type {};
 
-#if ONREJECT_IMPLICITLY_RESOLVED
   template<template<typename T> class PromiseType, typename T>
   OnRejectFunctionGeneric<PromiseType, T> OnRejectImplicitlyResolved<PromiseType, T>::wrapped(std::function<void(std::exception_ptr)>&& f) {
     if (f) {
@@ -46,7 +45,6 @@ namespace Promise2 {
 
     return OnRejectFunctionGeneric<PromiseType, void>{};
   }
-#endif // ONREJECT_IMPLICITLY_RESOLVED
 
   template<typename PredType, typename ReturnType, typename... ArgTypes>
   auto eliminateVoid(std::function<ReturnType(ArgTypes...)>&& f) {
