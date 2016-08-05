@@ -212,7 +212,13 @@ namespace Promise2 {
                                                    ThreadContext* &&context);
   };
 
-#if ONREJECT_IMPLICITLY_RESOLVED
+  class FulfillIgnoreException {};
+
+  template<typename ReturnType, typename Argument>
+  ReturnType ignoreFulfill(BoxVoid<Argument>) {
+    throw FulfillIgnoreException{};
+  }
+
   template<template<typename T> class PromiseType, typename T>
   struct OnRejectImplicitlyResolved {
     static OnRejectFunctionGeneric<PromiseType, T> wrapped(std::function<void(std::exception_ptr)>&&);
@@ -232,7 +238,6 @@ namespace Promise2 {
 
     static auto wrapped(...) -> std::false_type;
   };
-#endif // ONREJECT_IMPLICITLY_RESOLVED
   
   template<typename T, typename... _> struct IsKindOfDefer : public std::false_type {};
   template<typename T, typename... _> struct IsKindOfDefer<PromiseDefer<T>&&, _...> : public std::true_type {};
@@ -278,6 +283,28 @@ namespace Promise2 {
 
       if (!isValid()) throw std::logic_error("invalid promise");
       return Thenable::Then(_node, std::move(onFulfillFn), std::move(onRejectFn), std::move(context));
+    }
+
+    template<typename Wrapper, typename Thenable, typename OnFulfill>
+    auto fulfill(OnFulfill&& onFulfill,
+                 ThreadContext* &&context) {
+
+      static_assert(!std::is_same<declfn(onFulfill), std::false_type>::value, "you need to provide a callable");
+
+      return then<Wrapper, Thenable>(std::forward<OnFulfill>(onFulfill), 
+                                     OnRejectFunctionGeneric<Wrapper::template Type, typename declfn(onFulfill)::result_type>{},
+                                     std::move(context));
+    }
+
+    template<typename PromiseValueType, typename Wrapper, typename Thenable, typename OnReject>
+    auto reject(OnReject&& onReject, // < only allow returning void 
+                ThreadContext* &&context) {
+
+      static_assert(!std::is_same<declfn(onReject), std::false_type>::value, "you need to provide a callable");
+
+      return then<Wrapper, Thenable>(ignoreFulfill<void, PromiseValueType>,
+                                     std::forward<OnReject>(onReject),
+                                     std::move(context));
     }
 
   public:
