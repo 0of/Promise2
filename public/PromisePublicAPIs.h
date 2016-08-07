@@ -361,6 +361,18 @@ namespace Promise2 {
               ThreadContext* &&context) {
       return Base::template then<PromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
+
+    template<typename OnFulfill>
+    auto then(OnFulfill&& onFulfill,
+              ThreadContext* &&context) {
+      return Base::template fulfill<PromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::move(context));
+    }
+
+    template<typename OnReject>
+    auto caught(OnReject&& onReject, // < only allow returning void 
+               ThreadContext* &&context) {
+      return Base::template reject<PromiseTypeWrapper, Thenable>(std::forward<OnReject>(onReject), std::move(context));
+    }
   };
 
   //
@@ -404,12 +416,24 @@ namespace Promise2 {
       return Base::template then<RecursionPromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
     }
 
+    template<typename OnFulfill>
+    auto then(OnFulfill&& onFulfill,
+              ThreadContext* &&context) {
+      return Base::template fulfill<RecursionPromiseTypeWrapper, Thenable>(std::forward<OnFulfill>(onFulfill), std::move(context));
+    }
+
     // OnFulfill -> void(void)
     template<typename OnFulfill, typename OnReject>
     auto final(OnFulfill&& onFulfill,
                OnReject&& onReject, 
                ThreadContext* &&context) {
       return Base::template then<PromiseTypeWrapper, FinalThenable>(std::forward<OnFulfill>(onFulfill), std::forward<OnReject>(onReject), std::move(context));
+    }
+
+    template<typename OnFulfill>
+    auto final(OnFulfill&& onFulfill,
+               ThreadContext* &&context) {
+      return Base::template fulfill<PromiseTypeWrapper, FinalThenable>(std::forward<OnFulfill>(onFulfill), std::move(context));
     }
   };
 }
